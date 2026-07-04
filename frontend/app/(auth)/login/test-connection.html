@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login Connection Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-box {
+            background: white;
+            padding: 20px;
+            margin: 10px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .success { color: #28a745; }
+        .error { color: #dc3545; }
+        .info { color: #17a2b8; }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        pre {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>Login Connection Diagnostic Tool</h1>
+    
+    <div class="test-box">
+        <h2>1. Environment Check</h2>
+        <div id="env-check"></div>
+    </div>
+    
+    <div class="test-box">
+        <h2>2. Backend Health Check</h2>
+        <button onclick="testHealth()">Test Backend Connection</button>
+        <div id="health-result"></div>
+    </div>
+    
+    <div class="test-box">
+        <h2>3. Login Test</h2>
+        <button onclick="testLogin()">Test Super Admin Login</button>
+        <div id="login-result"></div>
+    </div>
+    
+    <div class="test-box">
+        <h2>4. CORS Test</h2>
+        <button onclick="testCORS()">Test CORS Configuration</button>
+        <div id="cors-result"></div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8000';
+        
+        // Environment check on load
+        window.onload = function() {
+            const envDiv = document.getElementById('env-check');
+            envDiv.innerHTML = `
+                <p class="info"><strong>Current Origin:</strong> ${window.location.origin}</p>
+                <p class="info"><strong>API URL:</strong> ${API_URL}</p>
+                <p class="info"><strong>Browser:</strong> ${navigator.userAgent}</p>
+            `;
+        };
+        
+        async function testHealth() {
+            const resultDiv = document.getElementById('health-result');
+            resultDiv.innerHTML = '<p class="info">Testing...</p>';
+            
+            try {
+                const response = await fetch(`${API_URL}/api/health`, {
+                    method: 'GET'
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.innerHTML = `
+                        <p class="success">✓ Backend is reachable!</p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <p class="error">✗ Backend returned error: ${response.status}</p>
+                    `;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <p class="error">✗ Cannot reach backend!</p>
+                    <p class="error">Error: ${error.message}</p>
+                    <p class="info">Make sure the backend is running on ${API_URL}</p>
+                `;
+            }
+        }
+        
+        async function testLogin() {
+            const resultDiv = document.getElementById('login-result');
+            resultDiv.innerHTML = '<p class="info">Testing login...</p>';
+            
+            try {
+                const response = await fetch(`${API_URL}/api/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        username: 'superadmin',
+                        password: 'Admin@123'
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.innerHTML = `
+                        <p class="success">✓ Login successful!</p>
+                        <p class="success">User: ${data.user.username}</p>
+                        <p class="success">Role: ${data.user.role}</p>
+                        <p class="info">Access Token (first 50 chars): ${data.access_token.substring(0, 50)}...</p>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <p class="error">✗ Login failed!</p>
+                        <p class="error">Status: ${response.status}</p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <p class="error">✗ Login request failed!</p>
+                    <p class="error">Error: ${error.message}</p>
+                `;
+            }
+        }
+        
+        async function testCORS() {
+            const resultDiv = document.getElementById('cors-result');
+            resultDiv.innerHTML = '<p class="info">Testing CORS...</p>';
+            
+            try {
+                // Test preflight
+                const response = await fetch(`${API_URL}/api/auth/login`, {
+                    method: 'OPTIONS',
+                    headers: {
+                        'Access-Control-Request-Method': 'POST',
+                        'Access-Control-Request-Headers': 'Content-Type'
+                    }
+                });
+                
+                const corsHeaders = {
+                    'Access-Control-Allow-Origin': response.headers.get('Access-Control-Allow-Origin'),
+                    'Access-Control-Allow-Methods': response.headers.get('Access-Control-Allow-Methods'),
+                    'Access-Control-Allow-Headers': response.headers.get('Access-Control-Allow-Headers'),
+                    'Access-Control-Allow-Credentials': response.headers.get('Access-Control-Allow-Credentials')
+                };
+                
+                resultDiv.innerHTML = `
+                    <p class="success">✓ CORS preflight response received</p>
+                    <pre>${JSON.stringify(corsHeaders, null, 2)}</pre>
+                `;
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <p class="error">✗ CORS test failed!</p>
+                    <p class="error">Error: ${error.message}</p>
+                `;
+            }
+        }
+    </script>
+</body>
+</html>

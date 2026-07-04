@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SuperAdmin Access Test</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #10b981;
+            padding-bottom: 10px;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f9f9f9;
+            border-left: 4px solid #10b981;
+        }
+        .success {
+            color: #10b981;
+            font-weight: bold;
+        }
+        .error {
+            color: #ef4444;
+            font-weight: bold;
+        }
+        .info {
+            color: #3b82f6;
+        }
+        button {
+            background: #10b981;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 14px;
+        }
+        button:hover {
+            background: #059669;
+        }
+        button.secondary {
+            background: #3b82f6;
+        }
+        button.secondary:hover {
+            background: #2563eb;
+        }
+        pre {
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+        .status {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-weight: bold;
+            font-size: 12px;
+        }
+        .status.online {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        .status.offline {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 SuperAdmin AI Insights Access Test</h1>
+        
+        <div class="section">
+            <h2>Step 1: Check Backend Server</h2>
+            <button onclick="checkBackend()">Test Backend</button>
+            <div id="backend-status"></div>
+        </div>
+
+        <div class="section">
+            <h2>Step 2: Check Authentication</h2>
+            <button onclick="checkAuth()">Check Current User</button>
+            <button onclick="testLogin()" class="secondary">Login as SuperAdmin</button>
+            <div id="auth-status"></div>
+        </div>
+
+        <div class="section">
+            <h2>Step 3: Test SuperAdmin AI Insights Endpoint</h2>
+            <button onclick="testAIInsights()">Test AI Insights Endpoint</button>
+            <div id="ai-insights-status"></div>
+        </div>
+
+        <div class="section">
+            <h2>Step 4: Check Browser Storage</h2>
+            <button onclick="checkStorage()">Check Local Storage</button>
+            <div id="storage-status"></div>
+        </div>
+
+        <div class="section">
+            <h2>Quick Actions</h2>
+            <button onclick="clearStorage()">Clear Storage</button>
+            <button onclick="copyDiagnostics()" class="secondary">Copy Diagnostics</button>
+        </div>
+
+        <div class="section" id="diagnostics" style="display: none;">
+            <h2>📋 Diagnostics Report</h2>
+            <pre id="diagnostics-output"></pre>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://127.0.0.1:8000';
+        let diagnosticsData = {};
+
+        async function checkBackend() {
+            const el = document.getElementById('backend-status');
+            el.innerHTML = '<p class="info">🔄 Checking backend...</p>';
+            
+            try {
+                const response = await fetch(`${API_URL}/api/health`);
+                const data = await response.json();
+                diagnosticsData.backend = { status: 'online', data };
+                el.innerHTML = `
+                    <p class="success">✅ Backend is ONLINE</p>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                `;
+            } catch (error) {
+                diagnosticsData.backend = { status: 'offline', error: error.message };
+                el.innerHTML = `
+                    <p class="error">❌ Backend is OFFLINE</p>
+                    <p>Error: ${error.message}</p>
+                    <p>Make sure backend is running on port 8000</p>
+                `;
+            }
+        }
+
+        async function checkAuth() {
+            const el = document.getElementById('auth-status');
+            el.innerHTML = '<p class="info">🔄 Checking authentication...</p>';
+            
+            const token = localStorage.getItem('access_token');
+            if (!token) {
+                diagnosticsData.auth = { status: 'not_logged_in' };
+                el.innerHTML = `
+                    <p class="error">❌ NOT LOGGED IN</p>
+                    <p>No access token found in localStorage</p>
+                    <button onclick="testLogin()">Login as SuperAdmin</button>
+                `;
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/api/auth/me`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const user = await response.json();
+                diagnosticsData.auth = { status: 'logged_in', user };
+                
+                const isSuperAdmin = user.role === 'super_admin';
+                el.innerHTML = `
+                    <p class="${isSuperAdmin ? 'success' : 'error'}">
+                        ${isSuperAdmin ? '✅' : '❌'} Logged in as: ${user.username}
+                    </p>
+                    <p>Role: <strong>${user.role}</strong></p>
+                    <p>Barangay: ${user.barangay_name || 'City-wide (None)'}</p>
+                    ${!isSuperAdmin ? '<p class="error">⚠️ You need to be logged in as super_admin!</p>' : ''}
+                    <pre>${JSON.stringify(user, null, 2)}</pre>
+                `;
+            } catch (error) {
+                diagnosticsData.auth = { status: 'error', error: error.message };
+                el.innerHTML = `
+                    <p class="error">❌ Authentication Error</p>
+                    <p>Error: ${error.message}</p>
+                    <p>Token may be invalid or expired</p>
+                    <button onclick="clearStorage()">Clear Storage</button>
+                    <button onclick="testLogin()">Login Again</button>
+                `;
+            }
+        }
+
+        async function testLogin() {
+            const el = document.getElementById('auth-status');
+            const username = prompt('Enter username:', 'superadmin');
+            const password = prompt('Enter password:', 'Admin@123');
+            
+            if (!username || !password) return;
+            
+            el.innerHTML = '<p class="info">🔄 Logging in...</p>';
+            
+            try {
+                const response = await fetch(`${API_URL}/api/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(`Login failed: ${errorData.detail || response.statusText}`);
+                }
+                
+                const data = await response.json();
+                localStorage.setItem('access_token', data.access_token);
+                localStorage.setItem('refresh_token', data.refresh_token);
+                
+                el.innerHTML = `
+                    <p class="success">✅ Login Successful!</p>
+                    <p>User: ${data.user.username}</p>
+                    <p>Role: ${data.user.role}</p>
+                    <button onclick="checkAuth()">Verify Authentication</button>
+                `;
+            } catch (error) {
+                el.innerHTML = `
+                    <p class="error">❌ Login Failed</p>
+                    <p>Error: ${error.message}</p>
+                `;
+            }
+        }
+
+        async function testAIInsights() {
+            const el = document.getElementById('ai-insights-status');
+            el.innerHTML = '<p class="info">🔄 Testing AI Insights endpoint...</p>';
+            
+            const token = localStorage.getItem('access_token');
+            if (!token) {
+                el.innerHTML = `
+                    <p class="error">❌ Not logged in</p>
+                    <p>Please login first</p>
+                `;
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/api/dashboard/superadmin/ai-insights`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({ detail: response.statusText }));
+                    throw new Error(`HTTP ${response.status}: ${errorData.detail || response.statusText}`);
+                }
+                
+                const data = await response.json();
+                diagnosticsData.aiInsights = { status: 'success', data };
+                
+                el.innerHTML = `
+                    <p class="success">✅ AI Insights Endpoint Working!</p>
+                    <p>Total Children: ${data.city_summary.total_children}</p>
+                    <p>At Risk: ${data.city_summary.total_at_risk}</p>
+                    <p>Critical Cases: ${data.city_summary.critical_cases}</p>
+                    <p>Overall Risk: ${data.city_summary.overall_risk_level}</p>
+                    <details>
+                        <summary>Full Response</summary>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    </details>
+                `;
+            } catch (error) {
+                diagnosticsData.aiInsights = { status: 'error', error: error.message };
+                
+                let helpText = '';
+                if (error.message.includes('403')) {
+                    helpText = '<p class="error">⚠️ You need to be logged in as <strong>super_admin</strong></p>';
+                } else if (error.message.includes('401')) {
+                    helpText = '<p class="error">⚠️ Authentication required or token expired</p>';
+                } else if (error.message.includes('404')) {
+                    helpText = '<p class="error">⚠️ Endpoint not found. Check backend is running and endpoint exists</p>';
+                }
+                
+                el.innerHTML = `
+                    <p class="error">❌ AI Insights Test Failed</p>
+                    <p>Error: ${error.message}</p>
+                    ${helpText}
+                `;
+            }
+        }
+
+        function checkStorage() {
+            const el = document.getElementById('storage-status');
+            const accessToken = localStorage.getItem('access_token');
+            const refreshToken = localStorage.getItem('refresh_token');
+            
+            diagnosticsData.storage = {
+                access_token: accessToken ? 'present' : 'missing',
+                refresh_token: refreshToken ? 'present' : 'missing'
+            };
+            
+            el.innerHTML = `
+                <p>Access Token: ${accessToken ? '<span class="success">✅ Present</span>' : '<span class="error">❌ Missing</span>'}</p>
+                <p>Refresh Token: ${refreshToken ? '<span class="success">✅ Present</span>' : '<span class="error">❌ Missing</span>'}</p>
+                ${accessToken ? `<details><summary>Token Preview</summary><pre>${accessToken.substring(0, 50)}...</pre></details>` : ''}
+            `;
+        }
+
+        function clearStorage() {
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('refresh_token');
+            alert('Storage cleared! Please login again.');
+            location.reload();
+        }
+
+        function copyDiagnostics() {
+            const diagnostics = JSON.stringify(diagnosticsData, null, 2);
+            document.getElementById('diagnostics-output').textContent = diagnostics;
+            document.getElementById('diagnostics').style.display = 'block';
+            
+            navigator.clipboard.writeText(diagnostics).then(() => {
+                alert('Diagnostics copied to clipboard!');
+            });
+        }
+
+        // Auto-check on load
+        window.addEventListener('load', () => {
+            checkBackend();
+            checkAuth();
+        });
+    </script>
+</body>
+</html>

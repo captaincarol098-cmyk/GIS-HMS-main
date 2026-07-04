@@ -1,0 +1,20 @@
+"use client";
+
+export default function TestDashboard() {
+  const isSuperAdmin = true;
+  
+  return (
+    <div className="space-y-6">
+      {/* Top Header Card */}
+      {isSuperAdmin ? (
+        <div className="bg-white">
+          <h1>Super Admin</h1>
+        </div>
+      ) : (
+        <div className="bg-gray-100">
+          <h1>Regular Admin</h1>
+        </div>
+      )}
+    </div>
+  );
+}

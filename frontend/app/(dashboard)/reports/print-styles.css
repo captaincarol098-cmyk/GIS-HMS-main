@@ -1,0 +1,174 @@
+/* Print Styles for Professional Report Document */
+
+@media print {
+  /* Hide non-printable elements */
+  .print\\:hidden,
+  button,
+  nav,
+  aside,
+  .no-print {
+    display: none !important;
+  }
+
+  /* Page setup */
+  @page {
+    size: letter;
+    margin: 0.75in;
+  }
+
+  /* Document container */
+  body {
+    font-family: 'Times New Roman', Times, serif;
+    font-size: 12pt;
+    line-height: 1.6;
+    color: #000;
+    background: white;
+  }
+
+  /* Remove shadows and borders for print */
+  * {
+    box-shadow: none !important;
+    border-radius: 0 !important;
+  }
+
+  /* Headings */
+  h1 {
+    font-size: 24pt;
+    font-weight: bold;
+    page-break-after: avoid;
+    margin-top: 0;
+  }
+
+  h2 {
+    font-size: 18pt;
+    font-weight: bold;
+    page-break-after: avoid;
+    margin-top: 24pt;
+    margin-bottom: 12pt;
+  }
+
+  h3 {
+    font-size: 14pt;
+    font-weight: bold;
+    page-break-after: avoid;
+    margin-top: 12pt;
+    margin-bottom: 6pt;
+  }
+
+  h4 {
+    font-size: 12pt;
+    font-weight: bold;
+    page-break-after: avoid;
+  }
+
+  /* Paragraphs */
+  p {
+    text-align: justify;
+    margin-bottom: 6pt;
+  }
+
+  /* Tables */
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    page-break-inside: avoid;
+    margin: 12pt 0;
+  }
+
+  th, td {
+    border: 1pt solid #000;
+    padding: 4pt 8pt;
+    text-align: left;
+  }
+
+  th {
+    background-color: #f0f0f0 !important;
+    font-weight: bold;
+  }
+
+  /* Lists */
+  ul, ol {
+    margin-left: 24pt;
+    page-break-inside: avoid;
+  }
+
+  li {
+    margin-bottom: 3pt;
+  }
+
+  /* Page breaks */
+  .print\\:break-after-page {
+    page-break-after: always;
+  }
+
+  .print\\:break-before {
+    page-break-before: always;
+  }
+
+  /* Avoid breaks inside these */
+  .avoid-break {
+    page-break-inside: avoid;
+  }
+
+  /* Images */
+  img {
+    max-width: 100%;
+    page-break-inside: avoid;
+  }
+
+  /* Cover page */
+  .cover-page {
+    text-align: center;
+    page-break-after: always;
+  }
+
+  /* Headers and footers for print */
+  .print-header {
+    position: running(header);
+  }
+
+  .print-footer {
+    position: running(footer);
+  }
+
+  /* Colored backgrounds to grayscale for printing */
+  .bg-indigo-50,
+  .bg-blue-50,
+  .bg-amber-50,
+  .bg-teal-50,
+  .bg-green-50,
+  .bg-red-50,
+  .bg-slate-50 {
+    background-color: #f9f9f9 !important;
+  }
+
+  /* Text colors to black for printing */
+  .text-indigo-600,
+  .text-blue-600,
+  .text-amber-600,
+  .text-teal-600,
+  .text-green-600,
+  .text-red-600,
+  .text-slate-600 {
+    color: #000 !important;
+  }
+
+  /* Remove interactive elements */
+  a[href]:after {
+    content: none;
+  }
+
+  /* Charts and graphics */
+  .chart,
+  .graph {
+    page-break-inside: avoid;
+    max-height: 400pt;
+  }
+}
+
+/* Screen-only helper classes */
+@media screen {
+  .print-only {
+    display: none;
+  }
+}
