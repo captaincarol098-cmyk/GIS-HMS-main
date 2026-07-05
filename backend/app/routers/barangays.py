@@ -1,11 +1,11 @@
 from uuid import UUID
-from datetime import datetime, timedelta
-from fastapi import APIRouter, Depends, HTTPException
+from datetime import datetime, timedelta, date
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import select, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from ..database import get_db
-from ..models import Barangay, Purok, Child, User, ActivityLog, Report, NutritionProgram
+from ..models import Barangay, Purok, Child, User, ActivityLog, Report, NutritionProgram, Measurement
 from ..models.entities import ActivityLogType
 from ..services.analytics import latest_measurements, EXCLUDED_BARANGAYS, summary_for_barangay
 from ..utils.who_zscore import calculate_prevalence, classify_risk_level
@@ -67,6 +67,55 @@ async def barangay_detail(barangay_id: UUID, db: AsyncSession = Depends(get_db))
         "puroks": [{"id": str(p.id), "name": p.name, "code": p.code, "is_archived": p.is_archived} for p in puroks],
         "child_count": len(children),
         "assigned_admin": {"id": str(admin.id), "username": admin.username, "email": admin.email} if admin else None,
+        "prevalence": prevalence,
+        "risk_level": risk,
+    }
+
+
+@router.get("/api/barangays/{barangay_id}/stats")
+async def barangay_stats(
+    barangay_id: UUID,
+    year: int = Query(None, description="Filter measurements by year"),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get barangay statistics with optional year filtering.
+    Returns prevalence data, case counts, and risk level.
+    """
+    b = await db.get(Barangay, barangay_id)
+    if not b:
+        raise HTTPException(404, "Barangay not found")
+    
+    # Get measurements - filter by year if provided
+    if year:
+        start_date = date(year, 1, 1)
+        end_date = date(year, 12, 31)
+        stmt = (
+            select(Measurement)
+            .join(Child, Child.id == Measurement.child_id)
+            .where(
+                Child.barangay_id == barangay_id,
+                Measurement.measurement_date.between(start_date, end_date)
+            )
+        )
+        measurements = (await db.scalars(stmt)).all()
+    else:
+        measurements = await latest_measurements(db, barangay_id)
+    
+    prevalence = calculate_prevalence(measurements) if measurements else {}
+    risk = classify_risk_level(prevalence) if prevalence else "low"
+    
+    severe_count = sum(1 for m in measurements if m.overall_status.value == "severe_acute_malnutrition")
+    moderate_count = sum(1 for m in measurements if m.overall_status.value == "moderate_acute_malnutrition")
+    
+    return {
+        "barangay_id": str(barangay_id),
+        "barangay_name": b.name,
+        "year": year or date.today().year,
+        "total_children": len(measurements),
+        "severe_cases": severe_count,
+        "moderate_cases": moderate_count,
+        "active_cases": severe_count + moderate_count,
         "prevalence": prevalence,
         "risk_level": risk,
     }
@@ -146,12 +195,28 @@ async def assign_barangay_admin(barangay_id: UUID, body: AssignAdminIn, db: Asyn
 
 
 @router.get("/api/barangays/{barangay_id}/activity-logs")
-async def barangay_activity_logs(barangay_id: UUID, db: AsyncSession = Depends(get_db), _=Depends(require_super_admin)):
-    since = datetime.utcnow() - timedelta(days=90)
-    logs = (await db.scalars(
-        select(ActivityLog).where(ActivityLog.barangay_id == barangay_id, ActivityLog.created_at >= since)
-        .order_by(ActivityLog.created_at.desc()).limit(100)
-    )).all()
+async def barangay_activity_logs(
+    barangay_id: UUID,
+    year: int = Query(None, description="Filter logs by year"),
+    db: AsyncSession = Depends(get_db),
+    _=Depends(require_super_admin)
+):
+    if year:
+        start_date = datetime(year, 1, 1)
+        end_date = datetime(year, 12, 31, 23, 59, 59)
+        logs = (await db.scalars(
+            select(ActivityLog).where(
+                ActivityLog.barangay_id == barangay_id,
+                ActivityLog.created_at.between(start_date, end_date)
+            )
+            .order_by(ActivityLog.created_at.desc()).limit(100)
+        )).all()
+    else:
+        since = datetime.utcnow() - timedelta(days=90)
+        logs = (await db.scalars(
+            select(ActivityLog).where(ActivityLog.barangay_id == barangay_id, ActivityLog.created_at >= since)
+            .order_by(ActivityLog.created_at.desc()).limit(100)
+        )).all()
     return [
         {"id": str(l.id), "action": l.action, "action_type": l.action_type.value if hasattr(l.action_type, "value") else "other",
          "user": l.user.username if l.user else "System", "details": l.details,
@@ -161,13 +226,30 @@ async def barangay_activity_logs(barangay_id: UUID, db: AsyncSession = Depends(g
 
 
 @router.get("/api/barangays/{barangay_id}/reports")
-async def barangay_reports(barangay_id: UUID, db: AsyncSession = Depends(get_db), _=Depends(require_super_admin)):
+async def barangay_reports(
+    barangay_id: UUID,
+    year: int = Query(None, description="Filter reports by year"),
+    db: AsyncSession = Depends(get_db),
+    _=Depends(require_super_admin)
+):
     user_ids = (await db.scalars(select(User.id).where(User.barangay_id == barangay_id))).all()
     if not user_ids:
         return []
-    reports = (await db.scalars(
-        select(Report).where(Report.created_by.in_(user_ids)).order_by(Report.created_at.desc()).limit(50)
-    )).all()
+    
+    if year:
+        start_date = datetime(year, 1, 1)
+        end_date = datetime(year, 12, 31, 23, 59, 59)
+        reports = (await db.scalars(
+            select(Report).where(
+                Report.created_by.in_(user_ids),
+                Report.created_at.between(start_date, end_date)
+            ).order_by(Report.created_at.desc()).limit(50)
+        )).all()
+    else:
+        reports = (await db.scalars(
+            select(Report).where(Report.created_by.in_(user_ids)).order_by(Report.created_at.desc()).limit(50)
+        )).all()
+    
     return [
         {"id": str(r.id), "title": r.title, "report_type": r.report_type.value if hasattr(r.report_type, "value") else "other",
          "status": r.status.value if hasattr(r.status, "value") else "draft",
@@ -459,15 +541,34 @@ async def export_barangay(barangay_id: UUID, db: AsyncSession = Depends(get_db),
 
 
 @router.get("/api/barangays/{barangay_id}/login-history")
-async def barangay_login_history(barangay_id: UUID, db: AsyncSession = Depends(get_db), _=Depends(require_super_admin)):
+async def barangay_login_history(
+    barangay_id: UUID,
+    year: int = Query(None, description="Filter login history by year"),
+    db: AsyncSession = Depends(get_db),
+    _=Depends(require_super_admin)
+):
     admins = (await db.scalars(select(User).where(User.barangay_id == barangay_id, User.role == "admin"))).all()
     if not admins:
         return []
     admin_ids = [a.id for a in admins]
-    logs = (await db.scalars(
-        select(ActivityLog).where(ActivityLog.user_id.in_(admin_ids), ActivityLog.action_type == ActivityLogType.auth)
-        .order_by(ActivityLog.created_at.desc()).limit(100)
-    )).all()
+    
+    if year:
+        start_date = datetime(year, 1, 1)
+        end_date = datetime(year, 12, 31, 23, 59, 59)
+        logs = (await db.scalars(
+            select(ActivityLog).where(
+                ActivityLog.user_id.in_(admin_ids),
+                ActivityLog.action_type == ActivityLogType.auth,
+                ActivityLog.created_at.between(start_date, end_date)
+            )
+            .order_by(ActivityLog.created_at.desc()).limit(100)
+        )).all()
+    else:
+        logs = (await db.scalars(
+            select(ActivityLog).where(ActivityLog.user_id.in_(admin_ids), ActivityLog.action_type == ActivityLogType.auth)
+            .order_by(ActivityLog.created_at.desc()).limit(100)
+        )).all()
+    
     return [
         {"id": str(l.id), "user": l.user.username if l.user else "Unknown",
          "action": l.action, "ip_address": (l.details or {}).get("ip_address", ""),

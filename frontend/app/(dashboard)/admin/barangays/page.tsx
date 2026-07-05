@@ -27,15 +27,59 @@ export default function BarangayManagementPage() {
   const [search, setSearch] = useState("");
   const [riskFilter, setRiskFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [childrenFilter, setChildrenFilter] = useState("all"); // New filter
+  const [adminFilter, setAdminFilter] = useState("all"); // New filter
+  const [yearFilter, setYearFilter] = useState(new Date().getFullYear());
   const [tab, setTab] = useState<TabId>("list");
   const [showArchiveModal, setShowArchiveModal] = useState<string | null>(null);
   const [detailBarangayId, setDetailBarangayId] = useState<string | null>(null);
   const [modalSubTab, setModalSubTab] = useState<"overview" | "puroks" | "activity" | "login" | "reports">("overview");
 
-  const barangaysQ = useQuery({ queryKey: ["barangays"], queryFn: () => api.get("/api/barangays?archived=true").then(r => r.data) });
-  const puroksQ = useQuery({ queryKey: ["puroks"], queryFn: () => api.get("/api/puroks?archived=true").then(r => r.data) });
-  const childrenQ = useQuery({ queryKey: ["children-admin"], queryFn: () => api.get("/api/children").then(r => r.data), retry: false });
-  const usersQ = useQuery({ queryKey: ["users"], queryFn: () => api.get("/api/users").then(r => r.data), retry: false });
+  const barangaysQ = useQuery({ 
+    queryKey: ["barangays"], 
+    queryFn: () => api.get("/api/barangays?archived=true").then(r => r.data),
+    refetchInterval: 10_000,
+    staleTime: 5_000,
+    retry: 2,
+  });
+  const barangayStatsQ = useQuery({
+    queryKey: ["barangay-stats", yearFilter],
+    queryFn: async () => {
+      console.log(`[BarangayMgmt] Fetching stats for year: ${yearFilter}`);
+      // Fetch stats for all barangays with year filter
+      const barangayList = await api.get("/api/barangays?archived=true").then(r => r.data);
+      const statsPromises = barangayList.map((b: any) =>
+        api.get(`/api/barangays/${b.id}/stats?year=${yearFilter}`).then(r => ({ barangay_id: b.id, stats: r.data }))
+      );
+      const results = await Promise.all(statsPromises);
+      console.log(`[BarangayMgmt] Received stats for ${results.length} barangays for year ${yearFilter}`, results.slice(0, 2));
+      return results;
+    },
+    refetchInterval: 10_000,
+    staleTime: 5_000,
+    retry: 2,
+  });
+  const puroksQ = useQuery({ 
+    queryKey: ["puroks"], 
+    queryFn: () => api.get("/api/puroks?archived=true").then(r => r.data),
+    refetchInterval: 10_000,
+    staleTime: 5_000,
+    retry: 2,
+  });
+  const childrenQ = useQuery({ 
+    queryKey: ["children-admin"], 
+    queryFn: () => api.get("/api/children").then(r => r.data), 
+    retry: false,
+    refetchInterval: 10_000,
+    staleTime: 5_000,
+  });
+  const usersQ = useQuery({ 
+    queryKey: ["users"], 
+    queryFn: () => api.get("/api/users").then(r => r.data), 
+    retry: false,
+    refetchInterval: 10_000,
+    staleTime: 5_000,
+  });
 
   const createMutation = useMutation({
     mutationFn: (data: any) => api.post("/api/barangays", data),
@@ -74,22 +118,49 @@ export default function BarangayManagementPage() {
     const bp = (puroksQ.data || []).filter((p: any) => p.barangay_id === b.id);
     const bc = (childrenQ.data || []).filter((c: any) => c.barangay_id === b.id);
     const admin = (usersQ.data || []).find((u: any) => u.barangay_id === b.id);
-    const active = bc.filter((c: any) => {
-      const m = c.measurements?.length ? c.measurements[c.measurements.length - 1] : null;
-      return m && ["severe_acute_malnutrition", "moderate_acute_malnutrition"].includes(m.overall_status);
-    }).length;
-    const risk = active > 20 ? "critical" : active > 10 ? "high" : active > 5 ? "moderate" : "low";
-    return { ...b, purok_count: bp.length, child_count: bc.length, active_cases: active, risk_level: risk, assigned_admin: admin };
+    
+    // Get stats from the API query (already filtered by year)
+    const statsEntry = (barangayStatsQ.data || []).find((s: any) => s.barangay_id === b.id);
+    const stats = statsEntry?.stats || {};
+    
+    // Use stats from API if available, otherwise fall back to 0
+    const active = stats.active_cases || 0;
+    const risk = stats.risk_level || "low";
+    
+    return { 
+      ...b, 
+      purok_count: bp.length, 
+      child_count: bc.length, 
+      active_cases: active, 
+      risk_level: risk, 
+      assigned_admin: admin 
+    };
   };
 
-  const rows = useMemo(() => barangays.map(enrichBarangay), [barangays, puroksQ.data, childrenQ.data, usersQ.data]);
+  const rows = useMemo(() => barangays.map(enrichBarangay), [barangays, puroksQ.data, childrenQ.data, usersQ.data, barangayStatsQ.data]);
   const filteredRows = useMemo(() => {
     let r = rows;
     const q = search.trim().toLowerCase();
     if (q) r = r.filter((row: any) => row.name.toLowerCase().includes(q) || row.code.toLowerCase().includes(q) || row.assigned_admin?.username?.toLowerCase().includes(q));
     if (riskFilter !== "all") r = r.filter((row: any) => row.risk_level === riskFilter);
+    if (statusFilter !== "all") r = r.filter((row: any) => statusFilter === "active" ? !row.is_archived : row.is_archived);
+    
+    // Children count filter
+    if (childrenFilter !== "all") {
+      if (childrenFilter === "none") r = r.filter((row: any) => row.child_count === 0);
+      else if (childrenFilter === "low") r = r.filter((row: any) => row.child_count > 0 && row.child_count <= 20);
+      else if (childrenFilter === "medium") r = r.filter((row: any) => row.child_count > 20 && row.child_count <= 50);
+      else if (childrenFilter === "high") r = r.filter((row: any) => row.child_count > 50);
+    }
+    
+    // Admin assignment filter
+    if (adminFilter !== "all") {
+      if (adminFilter === "assigned") r = r.filter((row: any) => row.assigned_admin);
+      else if (adminFilter === "unassigned") r = r.filter((row: any) => !row.assigned_admin);
+    }
+    
     return r;
-  }, [rows, search, riskFilter]);
+  }, [rows, search, riskFilter, statusFilter, childrenFilter, adminFilter]);
 
   const detailBarangay = useMemo(() => {
     if (!detailBarangayId) return null;
@@ -97,23 +168,23 @@ export default function BarangayManagementPage() {
   }, [detailBarangayId, rows]);
 
   const selectedStatsQ = useQuery({
-    queryKey: ["barangay-stats", detailBarangayId],
-    queryFn: () => api.get(`/api/barangays/${detailBarangayId}/stats`).then(r => r.data),
+    queryKey: ["barangay-stats", detailBarangayId, yearFilter],
+    queryFn: () => api.get(`/api/barangays/${detailBarangayId}/stats?year=${yearFilter}`).then(r => r.data),
     enabled: !!detailBarangayId && modalSubTab === "overview",
   });
   const selectedReportsQ = useQuery({
-    queryKey: ["barangay-reports", detailBarangayId],
-    queryFn: () => api.get(`/api/barangays/${detailBarangayId}/reports`).then(r => r.data),
+    queryKey: ["barangay-reports", detailBarangayId, yearFilter],
+    queryFn: () => api.get(`/api/barangays/${detailBarangayId}/reports?year=${yearFilter}`).then(r => r.data),
     enabled: !!detailBarangayId && modalSubTab === "reports",
   });
   const selectedLogsQ = useQuery({
-    queryKey: ["barangay-logs", detailBarangayId],
-    queryFn: () => api.get(`/api/barangays/${detailBarangayId}/activity-logs`).then(r => r.data),
+    queryKey: ["barangay-logs", detailBarangayId, yearFilter],
+    queryFn: () => api.get(`/api/barangays/${detailBarangayId}/activity-logs?year=${yearFilter}`).then(r => r.data),
     enabled: !!detailBarangayId && (modalSubTab === "activity" || modalSubTab === "overview"),
   });
   const selectedLoginQ = useQuery({
-    queryKey: ["barangay-login-history", detailBarangayId],
-    queryFn: () => api.get(`/api/barangays/${detailBarangayId}/login-history`).then(r => r.data),
+    queryKey: ["barangay-login-history", detailBarangayId, yearFilter],
+    queryFn: () => api.get(`/api/barangays/${detailBarangayId}/login-history?year=${yearFilter}`).then(r => r.data),
     enabled: !!detailBarangayId && (modalSubTab === "login" || modalSubTab === "overview"),
   });
 
@@ -222,18 +293,35 @@ export default function BarangayManagementPage() {
 
       {/* Barangay Table */}
       <Panel title="Barangay List" action={
-        <div className="flex gap-2 items-center">
-          <select className="admin-interactive-input text-xs rounded px-2 py-1 bg-white font-semibold" value={riskFilter} onChange={e => setRiskFilter(e.target.value)}>
-            <option value="all">All Risk</option>
-            <option value="low">Low</option>
-            <option value="moderate">Moderate</option>
-            <option value="high">High</option>
-            <option value="critical">Critical</option>
+        <div className="flex gap-2 items-center flex-wrap">
+          <select className="admin-interactive-input text-xs rounded px-2 py-1 bg-white font-semibold" value={yearFilter} onChange={e => setYearFilter(Number(e.target.value))} title="Filter by Year">
+            <option value={2024}>📅 2024</option>
+            <option value={2025}>📅 2025</option>
+            <option value={2026}>📅 2026</option>
           </select>
-          <select className="admin-interactive-input text-xs rounded px-2 py-1 bg-white font-semibold" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-            <option value="all">All Status</option>
-            <option value="active">Active</option>
-            <option value="archived">Archived</option>
+          <select className="admin-interactive-input text-xs rounded px-2 py-1 bg-white font-semibold" value={riskFilter} onChange={e => setRiskFilter(e.target.value)} title="Filter by Risk Level">
+            <option value="all">🎯 All Risk</option>
+            <option value="low">🟢 Low</option>
+            <option value="moderate">🟡 Moderate</option>
+            <option value="high">🟠 High</option>
+            <option value="critical">🔴 Critical</option>
+          </select>
+          <select className="admin-interactive-input text-xs rounded px-2 py-1 bg-white font-semibold" value={statusFilter} onChange={e => setStatusFilter(e.target.value)} title="Filter by Status">
+            <option value="all">📋 All Status</option>
+            <option value="active">✅ Active</option>
+            <option value="archived">🗂️ Archived</option>
+          </select>
+          <select className="admin-interactive-input text-xs rounded px-2 py-1 bg-white font-semibold" value={childrenFilter} onChange={e => setChildrenFilter(e.target.value)} title="Filter by Children Count">
+            <option value="all">👶 All Children</option>
+            <option value="none">None</option>
+            <option value="low">1-20</option>
+            <option value="medium">21-50</option>
+            <option value="high">50+</option>
+          </select>
+          <select className="admin-interactive-input text-xs rounded px-2 py-1 bg-white font-semibold" value={adminFilter} onChange={e => setAdminFilter(e.target.value)} title="Filter by Admin Assignment">
+            <option value="all">👤 All Admins</option>
+            <option value="assigned">✅ Assigned</option>
+            <option value="unassigned">❌ Unassigned</option>
           </select>
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />

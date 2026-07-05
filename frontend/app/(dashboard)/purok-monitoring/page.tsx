@@ -52,10 +52,19 @@ export default function PurokMonitoringPage() {
   const [selectedPurok, setSelectedPurok] = useState<PurokData | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [riskFilter, setRiskFilter] = useState<string>("all");
+  const [yearFilter, setYearFilter] = useState(new Date().getFullYear());
+
+  console.log(`[PurokMonitoring] Current year filter: ${yearFilter}`);
 
   const { data: puroks, isLoading } = useQuery({
-    queryKey: ["purok-monitoring"],
-    queryFn: () => api.get("/api/purok-monitoring").then((r) => r.data),
+    queryKey: ["purok-monitoring", yearFilter],
+    queryFn: () => {
+      console.log(`[PurokMonitoring] Fetching data for year: ${yearFilter}`);
+      return api.get(`/api/purok-monitoring?year=${yearFilter}`).then((r) => {
+        console.log(`[PurokMonitoring] Received ${r.data?.length || 0} puroks for year ${yearFilter}`);
+        return r.data;
+      });
+    },
   });
 
   const filteredPuroks = puroks?.filter((purok: PurokData) => {
@@ -219,6 +228,15 @@ export default function PurokMonitoringPage() {
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-slate-900">Purok Risk Ranking</h3>
             <div className="flex items-center gap-3">
+              <select
+                value={yearFilter}
+                onChange={(e) => setYearFilter(Number(e.target.value))}
+                className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white font-semibold"
+              >
+                <option value={2024}>📅 2024</option>
+                <option value={2025}>📅 2025</option>
+                <option value={2026}>📅 2026</option>
+              </select>
               <div className="relative">
                 <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input

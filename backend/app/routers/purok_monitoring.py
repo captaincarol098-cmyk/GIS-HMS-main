@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from datetime import datetime, date
 from ..database import get_db
 from ..middleware.rbac import get_current_user
 from ..models import Child, Measurement, Purok, Barangay, NutritionProgram, User
@@ -12,8 +13,16 @@ router = APIRouter(prefix="/api/purok-monitoring", tags=["purok-monitoring"])
 
 
 @router.get("")
-async def purok_monitoring(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+async def purok_monitoring(
+    year: int = Query(None, description="Filter data by year"),
+    db: AsyncSession = Depends(get_db), 
+    user: User = Depends(get_current_user)
+):
     from ..services.analytics import latest_measurements
+
+    # Default to current year if not specified
+    if year is None:
+        year = date.today().year
 
     if user.role.value == "admin" and user.barangay_id:
         puroks = list((await db.scalars(
@@ -24,18 +33,23 @@ async def purok_monitoring(db: AsyncSession = Depends(get_db), user: User = Depe
             select(Purok).order_by(Purok.name)
         )).all())
 
+    # Build year filter
+    start_date = datetime(year, 1, 1).date()
+    end_date = datetime(year, 12, 31).date()
+    year_filter = [Measurement.measurement_date.between(start_date, end_date)]
+
     # Get ALL measurements (not just latest) to match OPT+ count
     # This is what Operation Timbang Plus uses as the basis
     # CRITICAL: Filter by user's barangay to avoid mixing data from other barangays
     all_meas = (await db.scalars(
         select(Measurement)
         .join(Child, Child.id == Measurement.child_id)
-        .where(Child.barangay_id == user.barangay_id if user.role.value == "admin" else True)
+        .where(Child.barangay_id == user.barangay_id if user.role.value == "admin" else True, *year_filter)
         .options(selectinload(Measurement.child).selectinload(Child.purok))
     )).all()
     
-    # Also get latest measurements for nutritional status analysis
-    latest_meas = await latest_measurements(db, user.barangay_id if user.role.value == "admin" else None)
+    # Also get latest measurements for nutritional status analysis (filtered by year)
+    latest_meas = await latest_measurements(db, user.barangay_id if user.role.value == "admin" else None, year)
     
     meas_by_purok: dict = {}
     latest_by_purok: dict = {}

@@ -26,6 +26,7 @@ export default function PurokManagementPage() {
   const [search, setSearch] = useState("");
   const [riskFilter, setRiskFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [yearFilter, setYearFilter] = useState(new Date().getFullYear()); // Add year filter for both admin and superadmin
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [tab, setTab] = useState<TabId>("list");
   const [showArchiveModal, setShowArchiveModal] = useState<string | null>(null);
@@ -46,6 +47,23 @@ export default function PurokManagementPage() {
       params: barangayId ? { barangay_id: barangayId } : {}
     }).then(r => r.data),
     retry: false,
+  });
+  const purokStatsQ = useQuery({
+    queryKey: ["purok-stats", barangayId, yearFilter],
+    queryFn: async () => {
+      // Fetch stats for all puroks (or filtered by barangay) with year filter
+      const purokList = await api.get("/api/puroks?archived=true", {
+        params: barangayId ? { barangay_id: barangayId } : {}
+      }).then(r => r.data);
+      const statsPromises = purokList.map((p: any) =>
+        api.get(`/api/puroks/${p.id}/stats?year=${yearFilter}`).then(r => ({ purok_id: p.id, stats: r.data })).catch(() => ({ purok_id: p.id, stats: {} }))
+      );
+      const results = await Promise.all(statsPromises);
+      return results;
+    },
+    refetchInterval: 10_000,
+    staleTime: 5_000,
+    retry: 1,
   });
   const barangaysQ = useQuery({
     queryKey: ["barangays"],
@@ -90,25 +108,28 @@ export default function PurokManagementPage() {
   const enrichPurok = (p: any) => {
     const pc = (childrenQ.data || []).filter((c: any) => c.purok_id === p.id);
     
+    // Get stats from the API query (already filtered by year)
+    const statsEntry = (purokStatsQ.data || []).find((s: any) => s.purok_id === p.id);
+    const stats = statsEntry?.stats || {};
+    
+    // Use stats from API if available, otherwise fall back to 0
+    const activeCasesCount = stats.active_cases || 0;
+    const risk = stats.risk_level || "low";
+    
     // Count total measurement records (not just unique children)
     const totalMeasurements = pc.reduce((sum: number, c: any) => sum + (c.measurements?.length || 0), 0);
     
-    const activeCases = pc.filter((c: any) => {
-      const lastMeas = c.measurements?.length ? c.measurements[c.measurements.length - 1] : null;
-      return lastMeas && ["severe_acute_malnutrition", "moderate_acute_malnutrition"].includes(lastMeas.overall_status);
-    });
-    const risk = activeCases.length > 5 ? "critical" : activeCases.length > 2 ? "high" : activeCases.length > 0 ? "moderate" : "low";
     return { 
       ...p, 
       child_count: pc.length,              // Unique children (for reference)
-      total_records: totalMeasurements,    // Measurement records (OPT+ count) ← NEW
-      active_cases: activeCases.length, 
+      total_records: totalMeasurements,    // Measurement records (OPT+ count)
+      active_cases: activeCasesCount, 
       risk_level: risk, 
       barangay_name: barangayMap[p.barangay_id] || "" 
     };
   };
 
-  const rows = useMemo(() => filteredPuroks.map(enrichPurok), [filteredPuroks, childrenQ.data, barangayMap]);
+  const rows = useMemo(() => filteredPuroks.map(enrichPurok), [filteredPuroks, childrenQ.data, barangayMap, purokStatsQ.data]);
   const filteredRows = useMemo(() => {
     let r = rows;
     const q = search.trim().toLowerCase();
@@ -251,7 +272,12 @@ export default function PurokManagementPage() {
 
       {/* Purok Table */}
       <Panel title="Purok List" action={
-        <div className="flex gap-2 items-center">
+        <div className="flex gap-2 items-center flex-wrap">
+          <select className="admin-interactive-input text-xs rounded px-2 py-1 bg-white font-semibold" value={yearFilter} onChange={e => setYearFilter(Number(e.target.value))} title="Filter by Year">
+            <option value={2024}>📅 2024</option>
+            <option value={2025}>📅 2025</option>
+            <option value={2026}>📅 2026</option>
+          </select>
           <select className="admin-interactive-input text-xs rounded px-2 py-1 bg-white font-semibold" value={riskFilter} onChange={e => setRiskFilter(e.target.value)}>
             <option value="all">All Risk</option>
             <option value="low">Low</option>

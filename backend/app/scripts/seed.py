@@ -135,7 +135,7 @@ async def main():
         for i in range(50):
             barangay, lat, lng = random.choice(barangays)
             p = random.choice([x for x in all_puroks if x.barangay_id == barangay.id])
-            birth = date.today() - timedelta(days=random.randint(180, 60 * 30))
+            birth = date(2024, 1, 1) + timedelta(days=random.randint(180, 60 * 30))
             child = Child(
                 full_name=f"{random.choice(names)} Sample {i+1}",
                 birth_date=birth,
@@ -150,7 +150,8 @@ async def main():
             db.add(child)
             await db.flush()
             for n in range(3):
-                mdate = date.today() - timedelta(days=180 - n * 60)
+                # Create 2024 measurements: Sept, July, May 2024
+                mdate = date(2024, 9, 15) - timedelta(days=n * 60)
                 age = max(1, (mdate.year - birth.year) * 12 + mdate.month - birth.month)
                 malnourished = i % 5 == 0 or i % 3 == 0
                 height = 52 + age * 1.05 + random.uniform(-3, 3)
