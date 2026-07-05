@@ -1,12 +1,12 @@
 from datetime import datetime
 from uuid import UUID
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from ..database import get_db
-from ..middleware.rbac import get_current_user
+from ..middleware.rbac import get_current_user, require_super_admin
 from ..models import NutritionProgram, ProgramSession, ProgramParticipant, Child, User
 
 router = APIRouter(prefix="/api/programs", tags=["program-activities"])
@@ -357,3 +357,214 @@ async def create_program(
     await db.refresh(program)
     
     return _program_out(program)
+
+
+# Program Approval Endpoints for SuperAdmin
+
+class ProgramApprovalIn(BaseModel):
+    status: str  # "approved", "revision", "rejected"
+    comments: str | None = None
+
+
+@router.get("/approval/pending")
+async def get_pending_approvals(db: AsyncSession = Depends(get_db), _=Depends(require_super_admin)):
+    """Get all programs pending approval (SuperAdmin only)"""
+    try:
+        stmt = (
+            select(NutritionProgram)
+            .where(NutritionProgram.approval_status == "pending")
+            .options(
+                selectinload(NutritionProgram.purok),
+                selectinload(NutritionProgram.creator)
+            )
+            .order_by(NutritionProgram.created_at.desc())
+        )
+        programs = list((await db.scalars(stmt)).all())
+        
+        result = []
+        for p in programs:
+            result.append({
+                "id": str(p.id),
+                "name": p.name,
+                "description": p.description,
+                "frequency": p.frequency.value if hasattr(p.frequency, "value") else "monthly",
+                "status": p.status.value if hasattr(p.status, "value") else "active",
+                "approval_status": p.approval_status,
+                "government_funded": p.government_funded,
+                "budget_amount": p.budget_amount,
+                "purok": {
+                    "id": str(p.purok.id),
+                    "name": p.purok.name
+                } if p.purok else None,
+                "created_by": {
+                    "id": str(p.creator.id),
+                    "username": p.creator.username,
+                    "email": p.creator.email
+                } if p.creator else None,
+                "created_at": p.created_at.isoformat(),
+                "comments": p.comments
+            })
+        
+        return result
+    except Exception as e:
+        print(f"Error loading pending approvals: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(500, f"Error loading pending approvals: {str(e)}")
+
+
+@router.get("/approval/all-requests")
+async def get_all_approval_requests(db: AsyncSession = Depends(get_db), _=Depends(require_super_admin)):
+    """Get all programs with approval requests (SuperAdmin only)"""
+    try:
+        stmt = (
+            select(NutritionProgram)
+            .where(NutritionProgram.approval_status.in_(["pending", "revision", "rejected"]))
+            .options(
+                selectinload(NutritionProgram.purok),
+                selectinload(NutritionProgram.creator)
+            )
+            .order_by(NutritionProgram.created_at.desc())
+        )
+        programs = list((await db.scalars(stmt)).all())
+        
+        result = []
+        for p in programs:
+            result.append({
+                "id": str(p.id),
+                "name": p.name,
+                "description": p.description,
+                "frequency": p.frequency.value if hasattr(p.frequency, "value") else "monthly",
+                "approval_status": p.approval_status,
+                "government_funded": p.government_funded,
+                "budget_amount": p.budget_amount,
+                "purok": {
+                    "id": str(p.purok.id),
+                    "name": p.purok.name
+                } if p.purok else None,
+                "created_by": {
+                    "id": str(p.creator.id),
+                    "username": p.creator.username,
+                    "email": p.creator.email
+                } if p.creator else None,
+                "created_at": p.created_at.isoformat(),
+                "comments": p.comments
+            })
+        
+        return result
+    except Exception as e:
+        print(f"Error loading approval requests: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(500, f"Error loading approval requests: {str(e)}")
+
+
+@router.post("/{program_id}/approve")
+async def approve_program(
+    program_id: UUID,
+    body: ProgramApprovalIn,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_super_admin)
+):
+    """Approve a program (SuperAdmin only)"""
+    program = await db.scalar(
+        select(NutritionProgram).where(NutritionProgram.id == program_id)
+    )
+    
+    if not program:
+        raise HTTPException(404, "Program not found")
+    
+    if body.status not in ["approved", "revision", "rejected"]:
+        raise HTTPException(400, "Invalid status. Use 'approved', 'revision', or 'rejected'")
+    
+    program.approval_status = body.status
+    program.comments = body.comments
+    await db.commit()
+    await db.refresh(program)
+    
+    return {
+        "status": "success",
+        "message": f"Program '{program.name}' has been marked as {body.status}",
+        "program_id": str(program.id),
+        "approval_status": program.approval_status,
+        "comments": program.comments
+    }
+
+
+@router.post("/{program_id}/reject")
+async def reject_program(
+    program_id: UUID,
+    body: ProgramApprovalIn,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_super_admin)
+):
+    """Reject a program with comments (SuperAdmin only)"""
+    program = await db.scalar(
+        select(NutritionProgram).where(NutritionProgram.id == program_id)
+    )
+    
+    if not program:
+        raise HTTPException(404, "Program not found")
+    
+    program.approval_status = "rejected"
+    program.comments = body.comments or "Program rejected by SuperAdmin"
+    await db.commit()
+    await db.refresh(program)
+    
+    return {
+        "status": "success",
+        "message": f"Program '{program.name}' has been rejected",
+        "program_id": str(program.id),
+        "approval_status": program.approval_status,
+        "rejection_reason": program.comments
+    }
+
+
+@router.get("/{program_id}/approval-details")
+async def get_approval_details(
+    program_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(require_super_admin)
+):
+    """Get detailed approval information for a program"""
+    program = await db.scalar(
+        select(NutritionProgram)
+        .where(NutritionProgram.id == program_id)
+        .options(
+            selectinload(NutritionProgram.purok),
+            selectinload(NutritionProgram.creator),
+            selectinload(NutritionProgram.sessions).selectinload(ProgramSession.participants)
+        )
+    )
+    
+    if not program:
+        raise HTTPException(404, "Program not found")
+    
+    # Count total participants
+    total_participants = sum(len(s.participants) for s in program.sessions) if program.sessions else 0
+    
+    return {
+        "id": str(program.id),
+        "name": program.name,
+        "description": program.description,
+        "frequency": program.frequency.value if hasattr(program.frequency, "value") else "monthly",
+        "status": program.status.value if hasattr(program.status, "value") else "active",
+        "approval_status": program.approval_status,
+        "government_funded": program.government_funded,
+        "budget_amount": program.budget_amount,
+        "total_sessions": len(program.sessions) if program.sessions else 0,
+        "total_participants": total_participants,
+        "purok": {
+            "id": str(program.purok.id),
+            "name": program.purok.name,
+            "code": program.purok.code
+        } if program.purok else None,
+        "created_by": {
+            "id": str(program.creator.id),
+            "username": program.creator.username,
+            "email": program.creator.email
+        } if program.creator else None,
+        "created_at": program.created_at.isoformat(),
+        "updated_at": program.updated_at.isoformat() if program.updated_at else None,
+        "comments": program.comments
+    }

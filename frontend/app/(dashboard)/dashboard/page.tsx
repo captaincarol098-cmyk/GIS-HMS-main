@@ -96,7 +96,7 @@ export default function DashboardPage() {
     },
     refetchInterval: 15_000,
     staleTime: 0, // Always fetch fresh when year changes
-    cacheTime: 0, // Don't cache between year changes
+    gcTime: 0, // Don't cache between year changes
   });
 
   const alertsQuery = useQuery({
@@ -109,7 +109,7 @@ export default function DashboardPage() {
     },
     refetchInterval: 15_000,
     staleTime: 0,
-    cacheTime: 0,
+    gcTime: 0,
   });
 
   const rankingQuery = useQuery({
@@ -187,7 +187,7 @@ export default function DashboardPage() {
     refetchOnReconnect: true,  // Auto-refresh when reconnecting
     refetchIntervalInBackground: true,  // Keep polling in background
     staleTime: 0,  // Always treat data as stale - forces refetch
-    cacheTime: 1000,  // Minimal cache - almost no caching
+    gcTime: 1000,  // Minimal cache - almost no caching
     enabled: isSuperAdmin,
     retry: 3,
     retryDelay: 1000,
@@ -336,27 +336,27 @@ export default function DashboardPage() {
         <div
           className="relative overflow-hidden rounded-2xl p-6 shadow-lg text-white"
           style={{
-            background: "linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #0f4c75 100%)",
+            background: "linear-gradient(135deg, #0f4c2f 0%, #1b6b47 50%, #2d8d5f 100%)",
           }}
         >
           {/* Animated background pulse */}
           <div className="absolute inset-0 opacity-10 pointer-events-none">
-            <div className="absolute top-4 left-8 h-32 w-32 bg-cyan-400 rounded-full blur-3xl animate-pulse" />
-            <div className="absolute bottom-2 right-12 h-24 w-24 bg-indigo-400 rounded-full blur-2xl animate-pulse" style={{ animationDelay: "1s" }} />
+            <div className="absolute top-4 left-8 h-32 w-32 bg-emerald-400 rounded-full blur-3xl animate-pulse" />
+            <div className="absolute bottom-2 right-12 h-24 w-24 bg-green-400 rounded-full blur-2xl animate-pulse" style={{ animationDelay: "1s" }} />
           </div>
 
           <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
-              <div className="inline-flex items-center gap-2 bg-cyan-500/20 border border-cyan-400/30 rounded-full px-3 py-1 text-xs text-cyan-300 font-bold uppercase tracking-widest mb-3">
-                <span className={`h-1.5 w-1.5 rounded-full ${wsStatus.connected ? 'bg-cyan-400 animate-pulse' : 'bg-red-400'}`} />
+              <div className="inline-flex items-center gap-2 bg-emerald-500/20 border border-emerald-400/30 rounded-full px-3 py-1 text-xs text-emerald-300 font-bold uppercase tracking-widest mb-3">
+                <span className={`h-1.5 w-1.5 rounded-full ${wsStatus.connected ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'}`} />
                 {wsStatus.connected ? 'Live Monitoring Active' : 'Connection Offline'}
               </div>
               <h1 className="text-2xl font-black tracking-tight flex items-center gap-2.5 text-white">
-                <Radio className="h-6 w-6 text-cyan-400" />
+                <Radio className="h-6 w-6 text-emerald-400" />
                 Citywide Command Center
-                <span className="text-base font-normal text-cyan-200">({selectedYear})</span>
+                <span className="text-base font-normal text-emerald-200">({selectedYear})</span>
               </h1>
-              <p className="text-sm text-blue-200 font-medium mt-1">
+              <p className="text-sm text-emerald-200 font-medium mt-1">
                 Real-time oversight of all barangays · Cabadbaran City Health Management System
               </p>
             </div>
@@ -380,9 +380,9 @@ export default function DashboardPage() {
               </div>
               
               <div className="flex items-center gap-2 bg-white/10 border border-white/20 rounded-xl px-4 py-2.5 backdrop-blur-sm">
-                <Wifi className="h-4 w-4 text-green-400" />
+                <Wifi className="h-4 w-4 text-emerald-400" />
                 <div>
-                  <p className="text-[10px] text-blue-200 font-bold uppercase tracking-wide">Barangays Online</p>
+                  <p className="text-[10px] text-emerald-200 font-bold uppercase tracking-wide">Barangays Online</p>
                   <p className="text-xl font-black text-white">{summary.data?.barangays_online ?? 0}</p>
                 </div>
               </div>
@@ -396,14 +396,14 @@ export default function DashboardPage() {
               <div className="flex items-center gap-2 bg-white/10 border border-white/20 rounded-xl px-4 py-2.5 backdrop-blur-sm">
                 <Bell className="h-4 w-4 text-yellow-300" />
                 <div>
-                  <p className="text-[10px] text-blue-200 font-bold uppercase tracking-wide">Active Alerts</p>
+                  <p className="text-[10px] text-emerald-200 font-bold uppercase tracking-wide">Active Alerts</p>
                   <p className="text-xl font-black text-white">{liveStats.activeAlerts}</p>
                 </div>
               </div>
               <div className="flex items-center gap-2 bg-white/10 border border-white/20 rounded-xl px-4 py-2.5 backdrop-blur-sm">
-                <Users className="h-4 w-4 text-cyan-300" />
+                <Users className="h-4 w-4 text-emerald-300" />
                 <div>
-                  <p className="text-[10px] text-blue-200 font-bold uppercase tracking-wide">Children Monitored</p>
+                  <p className="text-[10px] text-emerald-200 font-bold uppercase tracking-wide">Children Monitored</p>
                   <p className="text-xl font-black text-white">{liveStats.total.toLocaleString()}</p>
                 </div>
               </div>
@@ -781,6 +781,93 @@ export default function DashboardPage() {
             <span className="bg-indigo-50 border border-indigo-200 text-indigo-700 text-[9px] font-black px-2.5 py-1 rounded-full uppercase">SuperAdmin Only</span>
           </div>
           <p className="text-sm text-slate-600 font-medium ml-8">City-wide barangay performance monitoring, predictive analytics, and resource optimization</p>
+
+          {/* ─── GIS HEAT MAP FOR SUPERADMIN ─── */}
+          <div className="admin-glass-panel p-5 flex flex-col min-h-[600px]">
+            <div className="flex flex-wrap items-center justify-between border-b border-slate-150 pb-3 mb-4">
+              <h2 className="text-base font-extrabold text-slate-800 tracking-tight flex items-center gap-2">
+                <MapPin className="h-5 w-5 text-emerald-600" />
+                GIS Heat Map - City-Wide Real-Time Monitoring
+              </h2>
+              <div className="text-[11px] text-slate-400 font-bold uppercase tracking-wider flex items-center gap-2">
+                <span className="h-2 w-2 bg-green-500 rounded-full animate-pulse" />
+                Live Updates
+              </div>
+            </div>
+
+            <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[210px_1fr] gap-4">
+              {/* Map Controls Panel */}
+              <div className="space-y-4">
+                {/* Risk Level Legend */}
+                <div className="bg-slate-50/50 border border-slate-150 rounded-xl p-3.5">
+                  <p className="text-xs font-extrabold text-slate-700 uppercase tracking-wider mb-2.5">Risk Level</p>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-xs text-slate-650 font-semibold">
+                      <span className="h-3 w-3 rounded-full bg-green-500" />
+                      <span>Low Risk</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-slate-650 font-semibold">
+                      <span className="h-3 w-3 rounded-full bg-yellow-500" />
+                      <span>Moderate Risk</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-slate-650 font-semibold">
+                      <span className="h-3 w-3 rounded-full bg-orange-500" />
+                      <span>High Risk</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-slate-650 font-semibold">
+                      <span className="h-3 w-3 rounded-full bg-red-600" />
+                      <span>Critical Risk</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Controls Toggle */}
+                <div className="bg-slate-50/50 border border-slate-150 rounded-xl p-3.5">
+                  <p className="text-xs font-extrabold text-slate-700 uppercase tracking-wider mb-2.5">Map Controls</p>
+                  <div className="space-y-2.5">
+                    <label className="flex items-center justify-between text-xs font-semibold text-slate-600 cursor-pointer">
+                      <span>Show Boundaries</span>
+                      <input
+                        type="checkbox"
+                        checked={mapBoundary}
+                        onChange={(e) => setMapBoundary(e.target.checked)}
+                        className="w-4 h-4"
+                      />
+                    </label>
+                    <label className="flex items-center justify-between text-xs font-semibold text-slate-600 cursor-pointer">
+                      <span>Heatmap Layer</span>
+                      <input
+                        type="checkbox"
+                        checked={mapHeatmap}
+                        onChange={(e) => setMapHeatmap(e.target.checked)}
+                        className="w-4 h-4"
+                      />
+                    </label>
+                    <label className="flex items-center justify-between text-xs font-semibold text-slate-600 cursor-pointer">
+                      <span>Health Facilities</span>
+                      <input
+                        type="checkbox"
+                        checked={mapFacilities}
+                        onChange={(e) => setMapFacilities(e.target.checked)}
+                        className="w-4 h-4"
+                      />
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {/* Map Frame */}
+              <div className="relative rounded-xl border border-slate-200 overflow-hidden shadow-inner flex-1" style={{ minHeight: '500px' }}>
+                <DynamicMap 
+                  showHotspots={mapHeatmap}
+                  showProgramCoverage={mapFacilities}
+                  showFacilities={mapFacilities}
+                  showHomeVisits={false}
+                  showPredictions={false}
+                />
+              </div>
+            </div>
+          </div>
 
           {/* ─── ROW 1: Compliance Dashboard ─── */}
           <div className="grid gap-6">

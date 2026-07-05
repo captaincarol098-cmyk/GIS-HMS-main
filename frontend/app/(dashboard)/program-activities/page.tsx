@@ -22,7 +22,14 @@ import {
   Play,
   Pause,
   Save,
-  FileText
+  FileText,
+  Award,
+  Heart,
+  RotateCcw,
+  ChevronRight,
+  User,
+  MessageSquare,
+  Loader2
 } from "lucide-react";
 
 interface Program {
@@ -51,14 +58,18 @@ export default function ProgramActivitiesPage() {
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
   const [selectedProgram, setSelectedProgram] = useState<Program | null>(null);
-  const [activeTab, setActiveTab] = useState<"programs" | "attendance" | "registration" | "report" | "interventions" | "accomplishments">("programs");
+  const [activeTab, setActiveTab] = useState<"programs" | "attendance" | "registration" | "report" | "interventions" | "accomplishments" | "approvals">("programs");
   const [searchQuery, setSearchQuery] = useState("");
   const [scanMode, setScanMode] = useState(false);
   const [manualSearch, setManualSearch] = useState("");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showRegistrationModal, setShowRegistrationModal] = useState(false);
+  const [showCommentModal, setShowCommentModal] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
   const [formMessage, setFormMessage] = useState("");
+  const [selectedItem, setSelectedItem] = useState<any>(null);
+  const [actionType, setActionType] = useState<"approve" | "reject" | "revision" | null>(null);
+  const [comment, setComment] = useState("");
 
   // Form state for creating program
   const [programForm, setProgramForm] = useState({
@@ -101,6 +112,14 @@ export default function ProgramActivitiesPage() {
     retry: 1,
   });
 
+  // Fetch nutrition programs (for SuperAdmin approvals)
+  const nutritionProgramsQuery = useQuery({
+    queryKey: ["nutrition-programs"],
+    queryFn: () => api.get("/api/nutrition-programs/programs").then((r) => r.data),
+    refetchInterval: 30_000,
+    enabled: user?.role === "super_admin",
+  });
+
   const { data: children, isLoading: childrenLoading } = useQuery({
     queryKey: ["program-children", selectedProgram?.id],
     queryFn: () => api.get(`/api/programs/${selectedProgram?.id}/children`).then((r) => r.data),
@@ -114,6 +133,35 @@ export default function ProgramActivitiesPage() {
       queryClient.invalidateQueries({ queryKey: ["program-children"] });
     },
   });
+
+  // Handle approval actions
+  const handleApprovalAction = async (type: "approve" | "reject" | "revision") => {
+    if (!selectedItem) return;
+    setActionType(type);
+    setShowCommentModal(true);
+  };
+
+  const submitApprovalAction = async () => {
+    if (!selectedItem || !actionType) return;
+
+    try {
+      const endpoint = `/api/nutrition-programs/programs/${selectedItem.id}/${actionType}`;
+      await api.put(endpoint, { comments: comment || "" });
+
+      // Refresh queries
+      await nutritionProgramsQuery.refetch();
+      setShowCommentModal(false);
+      setSelectedItem(null);
+      setComment("");
+      setActionType(null);
+      
+      // Show success message
+      alert(`✅ Program has been ${actionType === "approve" ? "approved" : actionType === "reject" ? "rejected" : "sent for revision"}`);
+    } catch (error: any) {
+      console.error("Error submitting action:", error);
+      alert("❌ Error: " + (error?.response?.data?.detail || "Failed to process approval"));
+    }
+  };
 
   const handleCreateProgram = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -322,6 +370,24 @@ export default function ProgramActivitiesPage() {
           >
             Report
           </button>
+          {user?.role === "super_admin" && (
+            <button
+              onClick={() => setActiveTab("approvals")}
+              className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${
+                activeTab === "approvals"
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              <Award className="h-4 w-4" />
+              Approvals
+              {nutritionProgramsQuery.data?.filter((p: any) => p.approval_status === "pending").length > 0 && (
+                <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                  {nutritionProgramsQuery.data.filter((p: any) => p.approval_status === "pending").length}
+                </span>
+              )}
+            </button>
+          )}
         </nav>
       </div>
 
@@ -710,6 +776,206 @@ export default function ProgramActivitiesPage() {
               <button className="flex items-center gap-2 px-4 py-2 bg-slate-200 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-300">
                 <Save className="h-4 w-4" />
                 Save Report
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Approvals Tab - SuperAdmin Only */}
+      {activeTab === "approvals" && user?.role === "super_admin" && (
+        <div className="space-y-6">
+          {/* Header */}
+          <div className="admin-glass-panel flex items-center justify-between p-6">
+            <div>
+              <h1 className="text-2xl font-extrabold text-slate-900 flex items-center gap-2.5">
+                <Award className="h-6 w-6 text-emerald-500" />
+                Program Approval Center
+              </h1>
+              <p className="text-sm text-slate-500 mt-1">
+                Review and approve nutrition programs
+              </p>
+            </div>
+          </div>
+
+          {/* Content Grid */}
+          <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
+            {/* Items List */}
+            <div className="admin-glass-panel overflow-hidden">
+              <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50">
+                <h2 className="text-sm font-extrabold text-slate-800">Pending Nutrition Programs</h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {nutritionProgramsQuery.data?.filter((p: any) => p.approval_status === "pending").length || 0} item{(nutritionProgramsQuery.data?.filter((p: any) => p.approval_status === "pending").length || 0) !== 1 ? "s" : ""} awaiting review
+                </p>
+              </div>
+
+              <div className="divide-y divide-slate-100 max-h-[600px] overflow-y-auto">
+                {nutritionProgramsQuery.isLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="h-6 w-6 text-slate-400 animate-spin" />
+                  </div>
+                ) : (nutritionProgramsQuery.data?.filter((p: any) => p.approval_status === "pending") || []).length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <CheckCircle className="h-12 w-12 text-green-500 mb-3" />
+                    <p className="text-sm font-semibold text-slate-700">No pending items</p>
+                    <p className="text-xs text-slate-500 mt-1">All items have been reviewed</p>
+                  </div>
+                ) : (
+                  (nutritionProgramsQuery.data?.filter((p: any) => p.approval_status === "pending") || []).map((item: any) => (
+                    <div
+                      key={item.id}
+                      onClick={() => setSelectedItem(item)}
+                      className={`p-4 cursor-pointer transition-colors hover:bg-slate-50/50 ${
+                        selectedItem?.id === item.id ? "bg-emerald-50/40 border-l-4 border-emerald-500" : ""
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <h3 className="text-sm font-extrabold text-slate-900">{item.name}</h3>
+                            <span className="bg-yellow-100 text-yellow-800 text-[9px] font-black px-2 py-0.5 rounded-full uppercase">
+                              Pending
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-4 text-xs text-slate-500 mt-2">
+                            <div className="flex items-center gap-1">
+                              <User className="h-3 w-3" />
+                              <span>Purok {item.purok_id}</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Calendar className="h-3 w-3" />
+                              <span>{item.frequency}</span>
+                            </div>
+                          </div>
+                          {item.description && (
+                            <p className="text-xs text-slate-600 mt-2 line-clamp-2">{item.description}</p>
+                          )}
+                        </div>
+                        <ChevronRight className="h-4 w-4 text-slate-400 shrink-0 mt-1" />
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Detail Panel */}
+            <div className="admin-glass-panel overflow-hidden">
+              {selectedItem ? (
+                <>
+                  <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50">
+                    <h2 className="text-sm font-extrabold text-slate-800">Review Details</h2>
+                  </div>
+
+                  <div className="p-5 space-y-4">
+                    {/* Item Details */}
+                    <div className="space-y-3">
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Name</p>
+                        <p className="text-sm font-extrabold text-slate-900 mt-0.5">{selectedItem.name}</p>
+                      </div>
+
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Description</p>
+                        <p className="text-xs text-slate-700 mt-0.5">{selectedItem.description || "N/A"}</p>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Frequency</p>
+                          <p className="text-xs font-semibold text-slate-700 mt-0.5">{selectedItem.frequency}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Budget</p>
+                          <p className="text-xs font-semibold text-slate-700 mt-0.5">
+                            {selectedItem.budget_amount ? `₱${selectedItem.budget_amount.toLocaleString()}` : "N/A"}
+                          </p>
+                        </div>
+                      </div>
+
+                      {selectedItem.comments && (
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Existing Comments</p>
+                          <p className="text-xs text-slate-700 mt-0.5 bg-slate-50 p-2 rounded">{selectedItem.comments}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="pt-4 border-t border-slate-100 space-y-2">
+                      <button
+                        onClick={() => handleApprovalAction("approve")}
+                        className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white text-xs font-extrabold transition-colors shadow-sm"
+                      >
+                        <CheckCircle className="h-4 w-4" />
+                        Approve
+                      </button>
+                      <button
+                        onClick={() => handleApprovalAction("revision")}
+                        className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-white text-xs font-extrabold transition-colors shadow-sm"
+                      >
+                        <RotateCcw className="h-4 w-4" />
+                        Return for Revision
+                      </button>
+                      <button
+                        onClick={() => handleApprovalAction("reject")}
+                        className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-gradient-to-r from-red-655 to-red-500 hover:from-red-500 hover:to-red-400 text-white text-xs font-extrabold transition-colors shadow-sm"
+                      >
+                        <XCircle className="h-4 w-4" />
+                        Reject
+                      </button>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12 text-center px-5">
+                  <MessageSquare className="h-12 w-12 text-slate-300 mb-3" />
+                  <p className="text-sm font-semibold text-slate-700">Select an item to review</p>
+                  <p className="text-xs text-slate-500 mt-1">Choose from the list to view details and take action</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Comment Modal */}
+      {showCommentModal && (
+        <div className="admin-modal-overlay fixed inset-0 flex items-center justify-center z-50 p-4">
+          <div className="admin-modal-content w-full max-w-md bg-white rounded-2xl border border-slate-100 shadow-2xl p-6 md:p-8 space-y-4">
+            <div className="flex items-start justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-sm font-extrabold text-slate-900">
+                {actionType === "approve" && "Add Approval Comments"}
+                {actionType === "revision" && "Revision Instructions"}
+                {actionType === "reject" && "Rejection Reason"}
+              </h3>
+            </div>
+            <div>
+              <textarea
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                placeholder="Enter your comments or instructions..."
+                className="admin-interactive-input w-full rounded-xl px-3 py-2 text-sm min-h-[120px]"
+              />
+            </div>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => {
+                  setShowCommentModal(false);
+                  setComment("");
+                  setActionType(null);
+                }}
+                className="admin-action-btn-secondary px-4 py-2 rounded-xl text-xs"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitApprovalAction}
+                className="admin-action-btn-primary px-4 py-2 rounded-xl text-xs"
+              >
+                {actionType === "approve" && "Approve"}
+                {actionType === "revision" && "Return for Revision"}
+                {actionType === "reject" && "Reject"}
               </button>
             </div>
           </div>

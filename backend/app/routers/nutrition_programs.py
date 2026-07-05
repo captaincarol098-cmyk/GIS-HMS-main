@@ -527,10 +527,16 @@ async def get_program_analytics(
     }
 
 
+from pydantic import BaseModel
+
+class ApprovalInput(BaseModel):
+    comments: Optional[str] = None
+
+
 @router.put("/programs/{program_id}/approve", response_model=NutritionProgramOut)
 async def approve_nutrition_program(
     program_id: UUID,
-    comments: Optional[str] = None,
+    body: ApprovalInput,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
@@ -540,7 +546,7 @@ async def approve_nutrition_program(
     if not program:
         raise HTTPException(status_code=404, detail="Program not found")
     program.approval_status = "approved"
-    program.comments = comments
+    program.comments = body.comments
     await db.commit()
     await db.refresh(program)
     return program
@@ -549,7 +555,7 @@ async def approve_nutrition_program(
 @router.put("/programs/{program_id}/reject", response_model=NutritionProgramOut)
 async def reject_nutrition_program(
     program_id: UUID,
-    comments: Optional[str] = None,
+    body: ApprovalInput,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
@@ -559,7 +565,7 @@ async def reject_nutrition_program(
     if not program:
         raise HTTPException(status_code=404, detail="Program not found")
     program.approval_status = "rejected"
-    program.comments = comments
+    program.comments = body.comments
     await db.commit()
     await db.refresh(program)
     return program
@@ -568,7 +574,7 @@ async def reject_nutrition_program(
 @router.put("/programs/{program_id}/revision", response_model=NutritionProgramOut)
 async def revision_nutrition_program(
     program_id: UUID,
-    comments: Optional[str] = None,
+    body: ApprovalInput,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
@@ -578,7 +584,7 @@ async def revision_nutrition_program(
     if not program:
         raise HTTPException(status_code=404, detail="Program not found")
     program.approval_status = "revision"
-    program.comments = comments
+    program.comments = body.comments
     await db.commit()
     await db.refresh(program)
     return program

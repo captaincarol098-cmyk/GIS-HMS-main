@@ -1026,6 +1026,465 @@ async def get_superadmin_opt_summary(
         raise HTTPException(status_code=500, detail=error_msg)
 
 
+@router.get("/superadmin/comprehensive-report")
+async def get_comprehensive_report(
+    year: int = Query(None, description="Filter data by year"),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """
+    Get comprehensive Operation Timbang Plus report for SuperAdmin
+    Returns city-wide overall statistics and summary
+    Defaults to 2025 if not specified
+    """
+    if user.role.value != "super_admin":
+        raise HTTPException(status_code=403, detail="SuperAdmin access required")
+
+    # Default to 2025 if not specified
+    if year is None:
+        year = 2025
+    
+    # Calculate date range for filtering
+    from datetime import datetime
+    start_date = datetime(year, 1, 1).date()
+    end_date = datetime(year, 12, 31).date()
+
+    try:
+        # Get all measurements for the year
+        measurements_query = (
+            select(Measurement)
+            .options(selectinload(Measurement.child).selectinload(Child.barangay))
+            .join(Child)
+            .where(
+                Child.is_active.is_(True),
+                Measurement.age_in_months.between(0, 59),
+                Measurement.measurement_date.between(start_date, end_date)
+            )
+        )
+        
+        measurements_result = await db.scalars(measurements_query)
+        measurements = measurements_result.all()
+        
+        # Get all barangays for population data
+        barangays_query = select(Barangay)
+        barangays_result = await db.scalars(barangays_query)
+        barangays = barangays_result.all()
+        
+        # Initialize counters
+        total_children = 0
+        total_below_normal = 0
+        total_above_normal = 0
+        
+        # Age group breakdown
+        age_group_counts = {
+            "0-5": {"total": 0, "below_normal": 0, "above_normal": 0},
+            "6-11": {"total": 0, "below_normal": 0, "above_normal": 0},
+            "12-23": {"total": 0, "below_normal": 0, "above_normal": 0},
+            "24-35": {"total": 0, "below_normal": 0, "above_normal": 0},
+            "36-47": {"total": 0, "below_normal": 0, "above_normal": 0},
+            "48-59": {"total": 0, "below_normal": 0, "above_normal": 0},
+        }
+        
+        # Nutritional status breakdown
+        nutritional_status = {
+            "severely_underweight": 0,
+            "underweight": 0,
+            "normal": 0,
+            "overweight": 0,
+            "severely_stunted": 0,
+            "stunted": 0,
+            "tall": 0,
+            "severely_wasted": 0,
+            "wasted": 0,
+            "obese": 0,
+        }
+        
+        # Gender breakdown
+        gender_breakdown = {"male": 0, "female": 0}
+        
+        # Barangay-level summary
+        barangay_summary = {}
+        
+        # Process each measurement
+        for measurement in measurements:
+            child = measurement.child
+            age = measurement.age_in_months
+            
+            total_children += 1
+            
+            # Get age group key
+            if age <= 5:
+                age_key = "0-5"
+            elif age <= 11:
+                age_key = "6-11"
+            elif age <= 23:
+                age_key = "12-23"
+            elif age <= 35:
+                age_key = "24-35"
+            elif age <= 47:
+                age_key = "36-47"
+            else:
+                age_key = "48-59"
+            
+            age_group_counts[age_key]["total"] += 1
+            
+            # Track if below or above normal
+            is_below_normal = False
+            is_above_normal = False
+            
+            # Count WAZ status
+            if measurement.waz_status == WazStatus.severely_underweight:
+                nutritional_status["severely_underweight"] += 1
+                is_below_normal = True
+            elif measurement.waz_status == WazStatus.underweight:
+                nutritional_status["underweight"] += 1
+                is_below_normal = True
+            elif measurement.waz_status == WazStatus.normal:
+                nutritional_status["normal"] += 1
+            elif measurement.waz_status == WazStatus.overweight:
+                nutritional_status["overweight"] += 1
+                is_above_normal = True
+            
+            # Count HAZ status
+            if measurement.haz_status == HazStatus.severely_stunted:
+                nutritional_status["severely_stunted"] += 1
+                if not is_below_normal:
+                    is_below_normal = True
+            elif measurement.haz_status == HazStatus.stunted:
+                nutritional_status["stunted"] += 1
+                if not is_below_normal:
+                    is_below_normal = True
+            elif measurement.haz_status == HazStatus.tall:
+                nutritional_status["tall"] += 1
+            
+            # Count WHZ status
+            if measurement.whz_status == WhzStatus.severely_wasted:
+                nutritional_status["severely_wasted"] += 1
+                if not is_below_normal:
+                    is_below_normal = True
+            elif measurement.whz_status == WhzStatus.wasted:
+                nutritional_status["wasted"] += 1
+                if not is_below_normal:
+                    is_below_normal = True
+            elif measurement.whz_status == WhzStatus.obese:
+                nutritional_status["obese"] += 1
+                if not is_above_normal:
+                    is_above_normal = True
+            
+            # Track below/above normal
+            if is_below_normal:
+                total_below_normal += 1
+                age_group_counts[age_key]["below_normal"] += 1
+            if is_above_normal:
+                total_above_normal += 1
+                age_group_counts[age_key]["above_normal"] += 1
+            
+            # Track gender
+            if child and child.sex:
+                if str(child.sex).upper() == "M":
+                    gender_breakdown["male"] += 1
+                else:
+                    gender_breakdown["female"] += 1
+            
+            # Track by barangay
+            if child and child.barangay:
+                barangay_name = child.barangay.name
+                if barangay_name not in barangay_summary:
+                    barangay_summary[barangay_name] = {
+                        "children_count": 0,
+                        "below_normal": 0,
+                        "above_normal": 0
+                    }
+                barangay_summary[barangay_name]["children_count"] += 1
+                if is_below_normal:
+                    barangay_summary[barangay_name]["below_normal"] += 1
+                if is_above_normal:
+                    barangay_summary[barangay_name]["above_normal"] += 1
+        
+        # Calculate total population from barangays
+        total_population = sum([b.population_count or 0 for b in barangays])
+        
+        # Calculate percentages
+        below_normal_percentage = (total_below_normal / total_children * 100) if total_children > 0 else 0
+        above_normal_percentage = (total_above_normal / total_children * 100) if total_children > 0 else 0
+        barangays_with_measurements = len([b for b in barangay_summary.values() if b["children_count"] > 0])
+        
+        # Sort barangays by children count (descending)
+        sorted_barangays = sorted(
+            [{"name": k, **v} for k, v in barangay_summary.items()],
+            key=lambda x: x["children_count"],
+            reverse=True
+        )
+
+        return {
+            "year": year,
+            "period": f"{start_date} to {end_date}",
+            "timestamp": datetime.now().isoformat(),
+            "summary": {
+                "total_population": total_population,
+                "total_children_measured": total_children,
+                "total_barangays": len(barangays),
+                "barangays_with_measurements": barangays_with_measurements,
+                "total_below_normal": total_below_normal,
+                "below_normal_percentage": round(below_normal_percentage, 2),
+                "total_above_normal": total_above_normal,
+                "above_normal_percentage": round(above_normal_percentage, 2),
+                "total_normal": nutritional_status["normal"],
+            },
+            "age_groups": age_group_counts,
+            "nutritional_status": nutritional_status,
+            "gender_breakdown": gender_breakdown,
+            "barangay_breakdown": sorted_barangays,
+        }
+
+    except Exception as e:
+        import traceback
+        error_msg = f"Error generating comprehensive report: {str(e)}"
+        print(error_msg)
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=error_msg)
+
+
+
+
+@router.get("/superadmin/opt-analytics")
+async def get_opt_analytics(
+    year: int = Query(None, description="Filter data by year"),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """
+    Get detailed OPT Plus Analytics with nutritional status breakdowns and barangay rankings
+    Returns comprehensive analytics data for the specified year
+    Defaults to current year if not specified
+    Accessible to: SuperAdmin (citywide), Admin (barangay-specific data)
+    """
+    # Default to current year
+    if year is None:
+        year = date.today().year
+    
+    # Calculate date range
+    from datetime import datetime
+    start_date = datetime(year, 1, 1).date()
+    end_date = datetime(year, 12, 31).date()
+
+    try:
+        # Get all measurements for the year
+        measurements_query = (
+            select(Measurement)
+            .options(selectinload(Measurement.child).selectinload(Child.barangay))
+            .join(Child)
+            .where(
+                Child.is_active.is_(True),
+                Measurement.age_in_months.between(0, 59),
+                Measurement.measurement_date.between(start_date, end_date)
+            )
+        )
+        
+        # Filter by barangay if user is admin
+        if user.role.value == "admin" and user.barangay_id:
+            measurements_query = measurements_query.where(Child.barangay_id == user.barangay_id)
+        
+        measurements_result = await db.scalars(measurements_query)
+        measurements = measurements_result.all()
+        
+        # Initialize counters
+        total_children = len(measurements)
+        total_below_normal = 0
+        total_above_normal = 0
+        total_normal = 0
+        
+        # Nutritional status breakdown
+        wfa_breakdown = {
+            "normal": {"boys": 0, "girls": 0, "total": 0, "percentage": 0},
+            "overweight": {"boys": 0, "girls": 0, "total": 0, "percentage": 0},
+            "underweight": {"boys": 0, "girls": 0, "total": 0, "percentage": 0},
+            "severely_underweight": {"boys": 0, "girls": 0, "total": 0, "percentage": 0},
+        }
+        
+        hfa_breakdown = {
+            "normal": {"boys": 0, "girls": 0, "total": 0, "percentage": 0},
+            "tall": {"boys": 0, "girls": 0, "total": 0, "percentage": 0},
+            "stunted": {"boys": 0, "girls": 0, "total": 0, "percentage": 0},
+            "severely_stunted": {"boys": 0, "girls": 0, "total": 0, "percentage": 0},
+        }
+        
+        whz_breakdown = {
+            "normal": {"boys": 0, "girls": 0, "total": 0, "percentage": 0},
+            "overweight": {"boys": 0, "girls": 0, "total": 0, "percentage": 0},
+            "obese": {"boys": 0, "girls": 0, "total": 0, "percentage": 0},
+            "moderately_wasted": {"boys": 0, "girls": 0, "total": 0, "percentage": 0},
+            "severely_wasted": {"boys": 0, "girls": 0, "total": 0, "percentage": 0},
+        }
+        
+        # Barangay rankings
+        barangay_data = {}
+        
+        # Process measurements
+        for measurement in measurements:
+            child = measurement.child
+            is_boy = child and str(child.sex).upper() == "M"
+            gender_key = "boys" if is_boy else "girls"
+            
+            # Count WFA status
+            if measurement.waz_status == WazStatus.severely_underweight:
+                wfa_breakdown["severely_underweight"][gender_key] += 1
+                wfa_breakdown["severely_underweight"]["total"] += 1
+                total_below_normal += 1
+            elif measurement.waz_status == WazStatus.underweight:
+                wfa_breakdown["underweight"][gender_key] += 1
+                wfa_breakdown["underweight"]["total"] += 1
+                total_below_normal += 1
+            elif measurement.waz_status == WazStatus.normal:
+                wfa_breakdown["normal"][gender_key] += 1
+                wfa_breakdown["normal"]["total"] += 1
+                total_normal += 1
+            elif measurement.waz_status == WazStatus.overweight:
+                wfa_breakdown["overweight"][gender_key] += 1
+                wfa_breakdown["overweight"]["total"] += 1
+                total_above_normal += 1
+            
+            # Count HFA status
+            if measurement.haz_status == HazStatus.severely_stunted:
+                hfa_breakdown["severely_stunted"][gender_key] += 1
+                hfa_breakdown["severely_stunted"]["total"] += 1
+            elif measurement.haz_status == HazStatus.stunted:
+                hfa_breakdown["stunted"][gender_key] += 1
+                hfa_breakdown["stunted"]["total"] += 1
+            elif measurement.haz_status == HazStatus.normal:
+                hfa_breakdown["normal"][gender_key] += 1
+                hfa_breakdown["normal"]["total"] += 1
+            elif measurement.haz_status == HazStatus.tall:
+                hfa_breakdown["tall"][gender_key] += 1
+                hfa_breakdown["tall"]["total"] += 1
+            
+            # Count WHZ status
+            if measurement.whz_status == WhzStatus.severely_wasted:
+                whz_breakdown["severely_wasted"][gender_key] += 1
+                whz_breakdown["severely_wasted"]["total"] += 1
+            elif measurement.whz_status == WhzStatus.wasted:
+                whz_breakdown["moderately_wasted"][gender_key] += 1
+                whz_breakdown["moderately_wasted"]["total"] += 1
+            elif measurement.whz_status == WhzStatus.normal:
+                whz_breakdown["normal"][gender_key] += 1
+                whz_breakdown["normal"]["total"] += 1
+            elif measurement.whz_status == WhzStatus.overweight:
+                whz_breakdown["overweight"][gender_key] += 1
+                whz_breakdown["overweight"]["total"] += 1
+            elif measurement.whz_status == WhzStatus.obese:
+                whz_breakdown["obese"][gender_key] += 1
+                whz_breakdown["obese"]["total"] += 1
+            
+            # Barangay tracking
+            if child and child.barangay:
+                barangay_name = child.barangay.name
+                if barangay_name not in barangay_data:
+                    barangay_data[barangay_name] = {
+                        "uw": 0, "st": 0, "ws": 0,
+                        "uw_count": 0, "st_count": 0, "ws_count": 0,
+                        "total": 0
+                    }
+                barangay_data[barangay_name]["total"] += 1
+                
+                if measurement.waz_status in [WazStatus.underweight, WazStatus.severely_underweight]:
+                    barangay_data[barangay_name]["uw_count"] += 1
+                if measurement.haz_status in [HazStatus.stunted, HazStatus.severely_stunted]:
+                    barangay_data[barangay_name]["st_count"] += 1
+                if measurement.whz_status in [WhzStatus.wasted, WhzStatus.severely_wasted]:
+                    barangay_data[barangay_name]["ws_count"] += 1
+        
+        # Calculate percentages
+        for status in wfa_breakdown:
+            total = wfa_breakdown[status]["total"]
+            wfa_breakdown[status]["percentage"] = (total / total_children * 100) if total_children > 0 else 0
+        
+        for status in hfa_breakdown:
+            total = hfa_breakdown[status]["total"]
+            hfa_breakdown[status]["percentage"] = (total / total_children * 100) if total_children > 0 else 0
+        
+        for status in whz_breakdown:
+            total = whz_breakdown[status]["total"]
+            whz_breakdown[status]["percentage"] = (total / total_children * 100) if total_children > 0 else 0
+        
+        # Create barangay rankings
+        underweight_rankings = []
+        stunting_rankings = []
+        wasting_rankings = []
+        
+        for barangay_name, data in sorted(barangay_data.items(), key=lambda x: x[1]["total"], reverse=True):
+            coverage = (data["total"] / total_children * 100) if total_children > 0 else 0
+            
+            if data["total"] > 0:
+                uw_prevalence = (data["uw_count"] / data["total"]) * 100
+                st_prevalence = (data["st_count"] / data["total"]) * 100
+                ws_prevalence = (data["ws_count"] / data["total"]) * 100
+            else:
+                uw_prevalence = st_prevalence = ws_prevalence = 0
+            
+            underweight_rankings.append({
+                "barangay": barangay_name,
+                "coverage": coverage,
+                "prevalence": uw_prevalence,
+                "affected": data["uw_count"]
+            })
+            
+            stunting_rankings.append({
+                "barangay": barangay_name,
+                "coverage": coverage,
+                "prevalence": st_prevalence,
+                "affected": data["st_count"]
+            })
+            
+            wasting_rankings.append({
+                "barangay": barangay_name,
+                "coverage": coverage,
+                "prevalence": ws_prevalence,
+                "affected": data["ws_count"]
+            })
+        
+        # Sort and add ranks
+        underweight_rankings.sort(key=lambda x: x["prevalence"], reverse=True)
+        stunting_rankings.sort(key=lambda x: x["prevalence"], reverse=True)
+        wasting_rankings.sort(key=lambda x: x["prevalence"], reverse=True)
+        
+        for idx, item in enumerate(underweight_rankings, 1):
+            item["rank"] = idx
+        for idx, item in enumerate(stunting_rankings, 1):
+            item["rank"] = idx
+        for idx, item in enumerate(wasting_rankings, 1):
+            item["rank"] = idx
+
+        return {
+            "year": year,
+            "summary": {
+                "total_children_measured": total_children,
+                "total_below_normal": total_below_normal,
+                "below_normal_percentage": (total_below_normal / total_children * 100) if total_children > 0 else 0,
+                "total_above_normal": total_above_normal,
+                "above_normal_percentage": (total_above_normal / total_children * 100) if total_children > 0 else 0,
+                "total_normal": total_normal,
+            },
+            "nutritional_status_breakdown": {
+                "wfa": wfa_breakdown,
+                "hfa": hfa_breakdown,
+                "whz": whz_breakdown,
+            },
+            "age_group_breakdown": {},  # Can add later if needed
+            "barangay_rankings": {
+                "underweight": underweight_rankings,
+                "stunting": stunting_rankings,
+                "wasting": wasting_rankings,
+            }
+        }
+
+    except Exception as e:
+        import traceback
+        error_msg = f"Error generating OPT Plus analytics: {str(e)}"
+        print(error_msg)
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=error_msg)
+
+
 @router.get("/superadmin/export-excel")
 async def export_opt_plus_excel(
     year: int = Query(None, description="Year to export data for"),

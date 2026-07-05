@@ -10,7 +10,7 @@ import { NutritionMonitoringReport } from "@/components/reports/NutritionMonitor
 import { ComprehensiveReportPDF } from "@/components/reports/ComprehensiveReportPDF";
 import { AdminComprehensiveReport } from "@/components/reports/AdminComprehensiveReport";
 import {
-  FileText, Download, Loader2, Plus, PieChart, Bell, Zap
+  FileText, Download, Loader2, Plus, PieChart, Bell, Zap, Filter, X
 } from "lucide-react";
 
 function formatDate(d: string) {
@@ -23,7 +23,7 @@ function formatDate(d: string) {
 export default function ReportsPage() {
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<"comprehensive" | "quick" | "saved">("comprehensive");
+  const [activeTab, setActiveTab] = useState<"comprehensive" | "quick" | "saved" | "opt-plus">("comprehensive");
   const [isSaving, setIsSaving] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [genError, setGenError] = useState("");
@@ -32,6 +32,12 @@ export default function ReportsPage() {
   const [viewingReport, setViewingReport] = useState(false);
   const [selectedYear, setSelectedYear] = useState<number>(2025);
   const yearOptions = Array.from({ length: 11 }, (_, i) => 2020 + i);
+  
+  // Filter states
+  const [selectedBarangay, setSelectedBarangay] = useState<string>("all");
+  const [selectedRiskLevel, setSelectedRiskLevel] = useState<string>("all");
+  const [selectedStatus, setSelectedStatus] = useState<string>("all");
+  const [dateRange, setDateRange] = useState<"month" | "quarter" | "year">("month");
 
   // Real-time data fetching with auto-refresh and year filtering
   const summaryQuery = useQuery({
@@ -549,6 +555,147 @@ export default function ReportsPage() {
         )}
       </div>
 
+      {/* FILTER SECTION */}
+      <div className="bg-gradient-to-r from-emerald-50 to-green-50 border border-green-200 rounded-2xl p-5 shadow-sm">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Filter className="h-5 w-5 text-green-600" />
+            <h3 className="text-sm font-bold text-green-900">Filters</h3>
+          </div>
+          <button
+            onClick={() => {
+              setSelectedBarangay("all");
+              setSelectedRiskLevel("all");
+              setSelectedStatus("all");
+              setDateRange("month");
+              setSelectedYear(2025);
+            }}
+            className="text-xs font-semibold text-green-600 hover:text-green-800 transition-colors"
+          >
+            Reset Filters
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+          {/* Year Filter */}
+          <div>
+            <label className="block text-xs font-semibold text-green-700 mb-2">Year</label>
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(Number(e.target.value))}
+              className="w-full border border-green-200 bg-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+            >
+              {yearOptions.map((year) => (
+                <option key={year} value={year}>
+                  {year}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Date Range Filter */}
+          <div>
+            <label className="block text-xs font-semibold text-green-700 mb-2">Period</label>
+            <select
+              value={dateRange}
+              onChange={(e) => setDateRange(e.target.value as "month" | "quarter" | "year")}
+              className="w-full border border-green-200 bg-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+            >
+              <option value="month">Monthly</option>
+              <option value="quarter">Quarterly</option>
+              <option value="year">Yearly</option>
+            </select>
+          </div>
+
+          {/* Barangay Filter */}
+          <div>
+            <label className="block text-xs font-semibold text-green-700 mb-2">Barangay</label>
+            <select
+              value={selectedBarangay}
+              onChange={(e) => setSelectedBarangay(e.target.value)}
+              className="w-full border border-green-200 bg-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+            >
+              <option value="all">All Barangays</option>
+              {(barangaysQuery.data || []).map((barangay: any) => (
+                <option key={barangay.id} value={barangay.id}>
+                  {barangay.barangay_name || barangay.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Risk Level Filter */}
+          <div>
+            <label className="block text-xs font-semibold text-green-700 mb-2">Risk Level</label>
+            <select
+              value={selectedRiskLevel}
+              onChange={(e) => setSelectedRiskLevel(e.target.value)}
+              className="w-full border border-green-200 bg-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+            >
+              <option value="all">All Levels</option>
+              <option value="critical">Critical</option>
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
+            </select>
+          </div>
+
+          {/* Status Filter */}
+          <div>
+            <label className="block text-xs font-semibold text-green-700 mb-2">Status</label>
+            <select
+              value={selectedStatus}
+              onChange={(e) => setSelectedStatus(e.target.value)}
+              className="w-full border border-green-200 bg-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+            >
+              <option value="all">All Status</option>
+              <option value="pending">Pending</option>
+              <option value="completed">Completed</option>
+              <option value="in-progress">In Progress</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Active Filters Display */}
+        {(selectedBarangay !== "all" || selectedRiskLevel !== "all" || selectedStatus !== "all" || dateRange !== "month") && (
+          <div className="mt-4 flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-semibold text-green-700">Active Filters:</span>
+            {selectedBarangay !== "all" && (
+              <span className="bg-green-200 text-green-800 px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-2">
+                {barangaysQuery.data?.find((b: any) => b.id === selectedBarangay)?.barangay_name || selectedBarangay}
+                <button onClick={() => setSelectedBarangay("all")} className="hover:text-green-900">
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            )}
+            {selectedRiskLevel !== "all" && (
+              <span className="bg-green-200 text-green-800 px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-2">
+                {selectedRiskLevel}
+                <button onClick={() => setSelectedRiskLevel("all")} className="hover:text-green-900">
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            )}
+            {selectedStatus !== "all" && (
+              <span className="bg-green-200 text-green-800 px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-2">
+                {selectedStatus}
+                <button onClick={() => setSelectedStatus("all")} className="hover:text-green-900">
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            )}
+            {dateRange !== "month" && (
+              <span className="bg-green-200 text-green-800 px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-2">
+                {dateRange}
+                <button onClick={() => setDateRange("month")} className="hover:text-green-900">
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* TABS */}
       <div className="flex gap-2 border-b border-slate-200 bg-white rounded-t-2xl px-5 pt-4">
         <button
@@ -582,6 +729,18 @@ export default function ReportsPage() {
         >
           Saved Reports
         </button>
+        {user?.role === "super_admin" && (
+          <button
+            onClick={() => setActiveTab("opt-plus")}
+            className={`px-4 py-2 text-sm font-bold rounded-t-lg border-b-2 transition-colors flex items-center gap-2 ${
+              activeTab === "opt-plus"
+                ? "text-emerald-600 border-emerald-600 bg-emerald-50"
+                : "text-slate-500 border-transparent hover:text-slate-700 hover:bg-slate-50"
+            }`}
+          >
+            📊 OPT Plus Report
+          </button>
+        )}
       </div>
 
       {/* COMPREHENSIVE REPORT TAB - REAL-TIME AUTO-UPDATING */}
@@ -663,6 +822,219 @@ export default function ReportsPage() {
             </div>
           )}
         </>
+      )}
+
+      {/* OPT PLUS REPORT TAB - SuperAdmin Only */}
+      {activeTab === "opt-plus" && user?.role === "super_admin" && (
+        <div className="bg-white border border-slate-200 rounded-b-2xl overflow-hidden">
+          <OptPlusReportTableSection />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// OPT Plus Report Table Component
+function OptPlusReportTableSection() {
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1);
+
+  const optPlusQuery = useQuery({
+    queryKey: ["opt-plus-report-table", selectedYear, selectedMonth],
+    queryFn: () =>
+      api.get(`/api/opt-plus/report?year=${selectedYear}&month=${selectedMonth}`)
+        .then((r) => r.data),
+    refetchInterval: 10_000,
+    staleTime: 5_000,
+    retry: 2,
+  });
+
+  const data = optPlusQuery.data;
+
+  const yearOptions = Array.from({ length: 11 }, (_, i) => 2020 + i);
+  const monthOptions = [
+    { value: 1, label: "January" },
+    { value: 2, label: "February" },
+    { value: 3, label: "March" },
+    { value: 4, label: "April" },
+    { value: 5, label: "May" },
+    { value: 6, label: "June" },
+    { value: 7, label: "July" },
+    { value: 8, label: "August" },
+    { value: 9, label: "September" },
+    { value: 10, label: "October" },
+    { value: 11, label: "November" },
+    { value: 12, label: "December" },
+  ];
+
+  return (
+    <div className="p-6 space-y-6">
+      {/* Controls */}
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-2">Year</label>
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(Number(e.target.value))}
+              className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            >
+              {yearOptions.map((year) => (
+                <option key={year} value={year}>
+                  {year}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-2">Month</label>
+            <select
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(Number(e.target.value))}
+              className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            >
+              {monthOptions.map((month) => (
+                <option key={month.value} value={month.value}>
+                  {month.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <button
+          onClick={() => optPlusQuery.refetch()}
+          disabled={optPlusQuery.isLoading}
+          className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white font-bold text-sm px-4 py-2 rounded-lg transition-colors"
+        >
+          🔄 Refresh
+        </button>
+      </div>
+
+      {/* Loading */}
+      {optPlusQuery.isLoading && (
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <div className="inline-block animate-spin h-8 w-8 text-emerald-600 border-4 border-emerald-200 border-t-emerald-600 rounded-full mb-3"></div>
+            <p className="text-slate-600 font-semibold">Loading OPT Plus report...</p>
+          </div>
+        </div>
+      )}
+
+      {/* Error */}
+      {optPlusQuery.isError && (
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-6 text-center">
+          <p className="text-red-600 font-semibold mb-2">Error Loading Report</p>
+          <p className="text-red-500 text-sm mb-4">{(optPlusQuery.error as any)?.message || "Failed to load data"}</p>
+          <button
+            onClick={() => optPlusQuery.refetch()}
+            className="bg-red-600 hover:bg-red-700 text-white font-semibold text-sm px-4 py-2 rounded-lg transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {/* Data Table */}
+      {!optPlusQuery.isLoading && !optPlusQuery.isError && data && (
+        <div className="space-y-4">
+          {/* Header Info */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <div className="bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 rounded-lg p-3">
+              <p className="text-xs font-semibold text-blue-700 uppercase">Total Population</p>
+              <p className="text-xl font-black text-blue-900 mt-1">{data.total_population.toLocaleString()}</p>
+            </div>
+            <div className="bg-gradient-to-br from-green-50 to-green-100 border border-green-200 rounded-lg p-3">
+              <p className="text-xs font-semibold text-green-700 uppercase">Children 0-59m</p>
+              <p className="text-xl font-black text-green-900 mt-1">{data.children_0_59_months.toLocaleString()}</p>
+            </div>
+            <div className="bg-gradient-to-br from-purple-50 to-purple-100 border border-purple-200 rounded-lg p-3">
+              <p className="text-xs font-semibold text-purple-700 uppercase">Total WFA</p>
+              <p className="text-xl font-black text-purple-900 mt-1">{data.total_wfa}</p>
+            </div>
+            <div className="bg-gradient-to-br from-orange-50 to-orange-100 border border-orange-200 rounded-lg p-3">
+              <p className="text-xs font-semibold text-orange-700 uppercase">Total HFA</p>
+              <p className="text-xl font-black text-orange-900 mt-1">{data.total_hfa}</p>
+            </div>
+            <div className="bg-gradient-to-br from-red-50 to-red-100 border border-red-200 rounded-lg p-3">
+              <p className="text-xs font-semibold text-red-700 uppercase">Total WFL/H</p>
+              <p className="text-xl font-black text-red-900 mt-1">{data.total_wflh}</p>
+            </div>
+          </div>
+
+          {/* Summary Table */}
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="bg-gradient-to-r from-emerald-700 to-emerald-600 text-white">
+                  <th className="border border-emerald-800 px-4 py-3 text-left font-bold">Location</th>
+                  <th className="border border-emerald-800 px-4 py-3 text-center font-bold">Province</th>
+                  <th className="border border-emerald-800 px-4 py-3 text-center font-bold">Region</th>
+                  <th className="border border-emerald-800 px-4 py-3 text-center font-bold">Municipality</th>
+                  <th className="border border-emerald-800 px-4 py-3 text-center font-bold">Coverage %</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="bg-white hover:bg-slate-50 transition">
+                  <td className="border border-slate-200 px-4 py-3 font-semibold text-slate-900">Citywide Summary</td>
+                  <td className="border border-slate-200 px-4 py-3 text-center text-slate-700">{data.province}</td>
+                  <td className="border border-slate-200 px-4 py-3 text-center text-slate-700">{data.region}</td>
+                  <td className="border border-slate-200 px-4 py-3 text-center text-slate-700">{data.municipality}</td>
+                  <td className="border border-slate-200 px-4 py-3 text-center font-bold text-emerald-600">{data.coverage_percentage.toFixed(1)}%</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          {/* Nutritional Status Summary Table */}
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="bg-gradient-to-r from-slate-700 to-slate-600 text-white">
+                  <th className="border border-slate-800 px-4 py-3 text-left font-bold">Age Group</th>
+                  <th className="border border-slate-800 px-4 py-3 text-center font-bold">Undernutrition</th>
+                  <th className="border border-slate-800 px-4 py-3 text-center font-bold">Overweight</th>
+                  <th className="border border-slate-800 px-4 py-3 text-center font-bold">Normal</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="bg-white hover:bg-slate-50 transition">
+                  <td className="border border-slate-200 px-4 py-3 font-semibold">0-23 Months</td>
+                  <td className="border border-slate-200 px-4 py-3 text-center">
+                    <span className="bg-red-100 text-red-800 px-3 py-1 rounded-full font-bold">{data.summary.undernutrition_0_23}</span>
+                  </td>
+                  <td className="border border-slate-200 px-4 py-3 text-center">
+                    <span className="bg-orange-100 text-orange-800 px-3 py-1 rounded-full font-bold">{data.summary.overweight_0_23}</span>
+                  </td>
+                  <td className="border border-slate-200 px-4 py-3 text-center text-slate-700">-</td>
+                </tr>
+                <tr className="bg-slate-50 hover:bg-slate-100 transition">
+                  <td className="border border-slate-200 px-4 py-3 font-semibold">0-59 Months (Total)</td>
+                  <td className="border border-slate-200 px-4 py-3 text-center">
+                    <span className="bg-red-100 text-red-800 px-3 py-1 rounded-full font-bold">{data.summary.undernutrition_0_59}</span>
+                  </td>
+                  <td className="border border-slate-200 px-4 py-3 text-center">
+                    <span className="bg-orange-100 text-orange-800 px-3 py-1 rounded-full font-bold">{data.summary.overweight_0_59}</span>
+                  </td>
+                  <td className="border border-slate-200 px-4 py-3 text-center text-slate-700">-</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          {/* Info Note */}
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-xs text-amber-800 font-semibold">
+            💡 <strong>Data Update:</strong> Real-time data refreshes every 10 seconds. Last updated: {new Date().toLocaleTimeString()}
+          </div>
+        </div>
+      )}
+
+      {/* Empty State */}
+      {!optPlusQuery.isLoading && !optPlusQuery.isError && !data && (
+        <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center">
+          <p className="text-slate-600 font-semibold">No data available for the selected period</p>
+        </div>
       )}
     </div>
   );

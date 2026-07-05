@@ -76,7 +76,7 @@ export default function ProgramApprovalCenter() {
       setSelectedItem(null);
       setComment("");
       setActionType(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error submitting action:", error);
     }
   };

@@ -4,6 +4,8 @@ import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Download, Upload, Search, FileSpreadsheet, TrendingUp, Users, AlertCircle, BarChart3 } from "lucide-react";
+import { ComprehensiveReport } from "./comprehensive-report";
+import { OptPlusAnalytics } from "./opt-plus-analytics";
 
 interface BarangayOPTData {
   sequence: number;
@@ -69,7 +71,7 @@ export default function SuperAdminOPTPlusPage() {
       return response.data;
     },
     staleTime: 0, // Always fetch fresh data
-    cacheTime: 0, // Don't cache
+    gcTime: 0, // Don't cache
   });
 
   const barangayData: BarangayOPTData[] = optDataQuery.data?.barangays || [];
@@ -585,6 +587,232 @@ export default function SuperAdminOPTPlusPage() {
           </div>
         </div>
       </div>
+
+      {/* OPT Plus Report Section */}
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+        <div className="mb-6">
+          <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+            📊 OPT Plus Report - Real-Time Tallies
+          </h2>
+          <p className="text-sm text-slate-600 mt-1">Auto-tallied data with real-time updates every 10 seconds</p>
+        </div>
+        <SuperAdminOptPlusReportSection selectedYear={selectedYear} />
+      </div>
     </div>
   );
 }
+
+// SuperAdmin OPT Plus Report Component
+function SuperAdminOptPlusReportSection({ selectedYear }: { selectedYear: number }) {
+  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1);
+  const [showFilters, setShowFilters] = useState(false);
+
+  const optPlusQuery = useQuery({
+    queryKey: ["superadmin-opt-plus-report", selectedYear, selectedMonth],
+    queryFn: () =>
+      api.get(`/api/opt-plus/report?year=${selectedYear}&month=${selectedMonth}`)
+        .then((r) => r.data),
+    refetchInterval: 10_000,
+    staleTime: 5_000,
+    retry: 2,
+  });
+
+  const data = optPlusQuery.data;
+
+  const monthOptions = [
+    { value: 1, label: "January" },
+    { value: 2, label: "February" },
+    { value: 3, label: "March" },
+    { value: 4, label: "April" },
+    { value: 5, label: "May" },
+    { value: 6, label: "June" },
+    { value: 7, label: "July" },
+    { value: 8, label: "August" },
+    { value: 9, label: "September" },
+    { value: 10, label: "October" },
+    { value: 11, label: "November" },
+    { value: 12, label: "December" },
+  ];
+
+  return (
+    <div className="space-y-4">
+      {/* Filter Section */}
+      <div className="flex items-center justify-between mb-4">
+        <button
+          onClick={() => setShowFilters(!showFilters)}
+          className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm px-4 py-2 rounded-xl transition-colors"
+        >
+          🔍 Filters
+        </button>
+        <button
+          onClick={() => optPlusQuery.refetch()}
+          disabled={optPlusQuery.isLoading}
+          className="inline-flex items-center gap-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-sm px-4 py-2 rounded-xl transition-colors disabled:opacity-50"
+        >
+          🔄 Refresh
+        </button>
+      </div>
+
+      {showFilters && (
+        <div className="bg-gradient-to-r from-emerald-50 to-green-50 border border-green-200 rounded-2xl p-5 mb-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-green-700 mb-2">Year: {selectedYear}</label>
+              <p className="text-sm font-semibold text-slate-700">Selected from main year dropdown</p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-green-700 mb-2">Month</label>
+              <select
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(Number(e.target.value))}
+                className="w-full border border-green-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              >
+                {monthOptions.map((month) => (
+                  <option key={month.value} value={month.value}>
+                    {month.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex items-end">
+              <button
+                onClick={() => {
+                  setSelectedMonth(new Date().getMonth() + 1);
+                }}
+                className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold text-sm px-4 py-2 rounded-lg transition-colors"
+              >
+                Reset Filters
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Loading State */}
+      {optPlusQuery.isLoading && (
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <div className="inline-block animate-spin h-8 w-8 text-emerald-600 border-4 border-emerald-200 border-t-emerald-600 rounded-full mb-3"></div>
+            <p className="text-slate-600 font-semibold">Loading OPT Plus report...</p>
+          </div>
+        </div>
+      )}
+
+      {/* Error State */}
+      {optPlusQuery.isError && (
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-12 text-center">
+          <p className="text-red-600 font-semibold mb-2">Error Loading Report</p>
+          <p className="text-red-500 text-sm">{(optPlusQuery.error as any)?.message || "Failed to load data"}</p>
+          <button
+            onClick={() => optPlusQuery.refetch()}
+            className="mt-4 bg-red-600 hover:bg-red-700 text-white font-semibold text-sm px-4 py-2 rounded-lg transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {/* Data Display */}
+      {!optPlusQuery.isLoading && !optPlusQuery.isError && data && (
+        <div className="space-y-4">
+          {/* Header Info */}
+          <div className="bg-white border border-slate-200 rounded-2xl p-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+              <div className="border-b-2 border-emerald-200 pb-2">
+                <p className="text-xs font-semibold text-slate-600 uppercase">Province</p>
+                <p className="text-lg font-bold text-slate-900">{data.province}</p>
+              </div>
+              <div className="border-b-2 border-emerald-200 pb-2">
+                <p className="text-xs font-semibold text-slate-600 uppercase">Region</p>
+                <p className="text-lg font-bold text-slate-900">{data.region}</p>
+              </div>
+              <div className="border-b-2 border-emerald-200 pb-2">
+                <p className="text-xs font-semibold text-slate-600 uppercase">Municipality</p>
+                <p className="text-lg font-bold text-slate-900">{data.municipality}</p>
+              </div>
+              <div className="border-b-2 border-emerald-200 pb-2">
+                <p className="text-xs font-semibold text-slate-600 uppercase">Coverage</p>
+                <p className="text-lg font-bold text-emerald-600">{data.coverage_percentage.toFixed(1)}%</p>
+              </div>
+            </div>
+
+            {/* KPI Cards */}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <div className="bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 rounded-lg p-3">
+                <p className="text-xs font-semibold text-blue-700 uppercase">Total Pop</p>
+                <p className="text-xl font-black text-blue-900 mt-1">{data.total_population.toLocaleString()}</p>
+              </div>
+              <div className="bg-gradient-to-br from-green-50 to-green-100 border border-green-200 rounded-lg p-3">
+                <p className="text-xs font-semibold text-green-700 uppercase">Children</p>
+                <p className="text-xl font-black text-green-900 mt-1">{data.children_0_59_months.toLocaleString()}</p>
+              </div>
+              <div className="bg-gradient-to-br from-purple-50 to-purple-100 border border-purple-200 rounded-lg p-3">
+                <p className="text-xs font-semibold text-purple-700 uppercase">WFA</p>
+                <p className="text-xl font-black text-purple-900 mt-1">{data.total_wfa}</p>
+              </div>
+              <div className="bg-gradient-to-br from-orange-50 to-orange-100 border border-orange-200 rounded-lg p-3">
+                <p className="text-xs font-semibold text-orange-700 uppercase">HFA</p>
+                <p className="text-xl font-black text-orange-900 mt-1">{data.total_hfa}</p>
+              </div>
+              <div className="bg-gradient-to-br from-red-50 to-red-100 border border-red-200 rounded-lg p-3">
+                <p className="text-xs font-semibold text-red-700 uppercase">WFL/H</p>
+                <p className="text-xl font-black text-red-900 mt-1">{data.total_wflh}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Summary */}
+          <div className="bg-gradient-to-r from-emerald-50 to-green-50 border border-green-200 rounded-2xl p-4">
+            <h3 className="text-lg font-black text-emerald-900 mb-3">Children Affected Summary</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="bg-white rounded-lg p-3 border border-slate-200">
+                <p className="text-xs font-semibold text-slate-600 uppercase">Undernutrition (0-59m)</p>
+                <p className="text-2xl font-black text-red-600 mt-1">{data.summary.undernutrition_0_59}</p>
+              </div>
+              <div className="bg-white rounded-lg p-3 border border-slate-200">
+                <p className="text-xs font-semibold text-slate-600 uppercase">Overweight (0-59m)</p>
+                <p className="text-2xl font-black text-orange-600 mt-1">{data.summary.overweight_0_59}</p>
+              </div>
+              <div className="bg-white rounded-lg p-3 border border-slate-200">
+                <p className="text-xs font-semibold text-slate-600 uppercase">Undernutrition (0-23m)</p>
+                <p className="text-2xl font-black text-red-700 mt-1">{data.summary.undernutrition_0_23}</p>
+              </div>
+              <div className="bg-white rounded-lg p-3 border border-slate-200">
+                <p className="text-xs font-semibold text-slate-600 uppercase">Overweight (0-23m)</p>
+                <p className="text-2xl font-black text-orange-700 mt-1">{data.summary.overweight_0_23}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Empty State */}
+      {!optPlusQuery.isLoading && !optPlusQuery.isError && !data && (
+        <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center">
+          <p className="text-slate-600 font-semibold">No data available for the selected period</p>
+        </div>
+      )}
+
+      {/* Comprehensive Overall Report Section */}
+      <div className="mt-8 border-t-2 border-slate-200 pt-8">
+        <div className="mb-6">
+          <h2 className="text-2xl font-extrabold text-slate-900">📈 Overall Report for {selectedYear}</h2>
+          <p className="text-sm text-slate-600 mt-1">City-wide comprehensive statistics and data analysis</p>
+        </div>
+        <ComprehensiveReport selectedYear={selectedYear} />
+      </div>
+
+      {/* Detailed Analytics Section */}
+      <div className="mt-8 border-t-2 border-slate-200 pt-8">
+        <div className="mb-6">
+          <h2 className="text-2xl font-extrabold text-slate-900">📊 Detailed Nutritional Analytics</h2>
+          <p className="text-sm text-slate-600 mt-1">Comprehensive breakdown by nutritional indicator and barangay rankings</p>
+        </div>
+        <OptPlusAnalytics selectedYear={selectedYear} />
+      </div>
+    </div>
+  );
+}
+

@@ -10,12 +10,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query, File, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from openpyxl import load_workbook
 from io import BytesIO
 from ..database import get_db
 from ..middleware.rbac import get_current_user
 from ..models import User, Child, Measurement, Barangay, Purok
-from ..models.entities import Sex
+from ..models.entities import Sex, WazStatus, HazStatus, WhzStatus
 from ..services.opt_plus_calculations import (
     calculate_age_in_months,
     adjust_height_for_position,
@@ -407,6 +408,200 @@ async def validate_measurement(
 # ============================================================================
 # MODULE 6: BATCH IMPORT TO ASSESSMENT RECORDS
 # ============================================================================
+
+@router.get("/report")
+async def get_opt_plus_report(
+    year: int = Query(None, description="Filter data by year"),
+    month: int = Query(None, description="Filter data by month (1-12)"),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """
+    Get OPT Plus report data for dashboard
+    Returns aggregated child nutrition data with KPIs and summaries
+    Accessible to all authenticated users
+    """
+    
+    # Use current year/month if not specified
+    if year is None:
+        year = date.today().year
+    if month is None:
+        month = date.today().month
+    
+    # Calculate date range
+    from calendar import monthrange
+    
+    start_date = datetime(year, month, 1).date()
+    _, last_day = monthrange(year, month)
+    end_date = datetime(year, month, last_day).date()
+    
+    try:
+        # Get all active children aged 0-59 months with measurements in the period
+        measurements_query = (
+            select(Measurement)
+            .options(selectinload(Measurement.child).selectinload(Child.barangay))
+            .join(Child)
+            .where(
+                Child.is_active.is_(True),
+                Measurement.age_in_months.between(0, 59),
+                Measurement.measurement_date.between(start_date, end_date)
+            )
+        )
+        
+        measurements_result = await db.scalars(measurements_query)
+        measurements = measurements_result.all()
+        
+        # Get barangay data for header
+        barangays_result = await db.scalars(select(Barangay))
+        barangays = barangays_result.all()
+        
+        # Get total population count
+        total_population = sum([b.population_count or 0 for b in barangays]) or 10000
+        
+        # Initialize counters
+        children_0_59_months = 0
+        total_wfa = 0
+        total_hfa = 0
+        total_wflh = 0
+        
+        undernutrition_0_59 = 0
+        overweight_0_59 = 0
+        undernutrition_0_23 = 0
+        overweight_0_23 = 0
+        
+        children_by_age_group = {
+            "0-5": 0,
+            "6-11": 0,
+            "12-23": 0,
+            "24-35": 0,
+            "36-47": 0,
+            "48-59": 0,
+        }
+        
+        gender_breakdown = {
+            "male": 0,
+            "female": 0
+        }
+        
+        # Process measurements
+        for measurement in measurements:
+            child = measurement.child
+            age = measurement.age_in_months
+            
+            children_0_59_months += 1
+            
+            # Count by indicator
+            if measurement.waz_status is not None:
+                total_wfa += 1
+            if measurement.haz_status is not None:
+                total_hfa += 1
+            if measurement.whz_status is not None:
+                total_wflh += 1
+            
+            # Determine age group
+            if age <= 5:
+                age_group = "0-5"
+            elif age <= 11:
+                age_group = "6-11"
+            elif age <= 23:
+                age_group = "12-23"
+            elif age <= 35:
+                age_group = "24-35"
+            elif age <= 47:
+                age_group = "36-47"
+            else:
+                age_group = "48-59"
+            
+            children_by_age_group[age_group] += 1
+            
+            # Count gender
+            if child and child.sex:
+                if str(child.sex).upper() == "M":
+                    gender_breakdown["male"] += 1
+                else:
+                    gender_breakdown["female"] += 1
+            
+            # Count nutritional issues
+            # Using WAZ (Weight-for-Age) as primary indicator for undernutrition
+            is_undernutrition = False
+            is_overweight = False
+            
+            if measurement.waz_status in [WazStatus.underweight, WazStatus.severely_underweight]:
+                is_undernutrition = True
+            elif measurement.waz_status == WazStatus.overweight:
+                is_overweight = True
+            
+            # Fallback to HAZ and WHZ if WAZ not available
+            if measurement.haz_status in [HazStatus.stunted, HazStatus.severely_stunted]:
+                is_undernutrition = True
+            if measurement.whz_status in [WhzStatus.wasted, WhzStatus.severely_wasted]:
+                is_undernutrition = True
+            
+            if is_undernutrition:
+                undernutrition_0_59 += 1
+                if age <= 23:
+                    undernutrition_0_23 += 1
+            
+            if is_overweight:
+                overweight_0_59 += 1
+                if age <= 23:
+                    overweight_0_23 += 1
+        
+        # Build age group data array
+        age_group_data = []
+        for age_group in ["0-5", "6-11", "12-23", "24-35", "36-47", "48-59"]:
+            age_group_data.append({
+                "age_group": age_group,
+                "count": children_by_age_group[age_group]
+            })
+        
+        # Get location info (assuming all barangays are in same municipality/region/province)
+        municipality = "San Vicente"  # Placeholder
+        region = "Region X (Northern Mindanao)"  # Placeholder
+        province = "Misamis Oriental"  # Placeholder
+        psgc = "103674000"  # Placeholder
+        
+        # Calculate coverage percentage - if no children measured, default to 0
+        if children_0_59_months > 0:
+            coverage_percentage = (children_0_59_months / max(1, (total_population * 0.12))) * 100
+            coverage_percentage = min(100, coverage_percentage)  # Cap at 100%
+        else:
+            coverage_percentage = 0
+        
+        return {
+            "province": province,
+            "region": region,
+            "municipality": municipality,
+            "psgc": psgc,
+            "total_population": total_population,
+            "children_0_59_months": children_0_59_months,
+            "coverage_percentage": coverage_percentage,
+            "total_wfa": total_wfa,
+            "total_hfa": total_hfa,
+            "total_wflh": total_wflh,
+            "age_group_data": age_group_data,
+            "gender_breakdown": gender_breakdown,
+            "summary": {
+                "undernutrition_0_59": undernutrition_0_59,
+                "overweight_0_59": overweight_0_59,
+                "undernutrition_0_23": undernutrition_0_23,
+                "overweight_0_23": overweight_0_23
+            },
+            "period": {
+                "year": year,
+                "month": month,
+                "start_date": str(start_date),
+                "end_date": str(end_date)
+            }
+        }
+        
+    except Exception as e:
+        import traceback
+        error_msg = f"Error generating OPT Plus report: {str(e)}"
+        print(error_msg)
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=error_msg)
+
 
 @router.post("/import-measurements")
 async def import_measurements(

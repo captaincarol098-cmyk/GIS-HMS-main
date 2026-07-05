@@ -25,7 +25,6 @@ import {
   Settings,
   Heart,
   Trophy,
-  Award,
   Calendar,
   MessageSquare,
   Target,
@@ -267,7 +266,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   ];
 
   const superAdminNav: NavItem[] = [
-    { label: "Program Approvals", href: "/admin/approvals", icon: Award },
     { label: "Users Management", href: "/admin/users", icon: Users },
   ];
 

@@ -96,10 +96,11 @@ function pinIcon(status: string | undefined) {
 
 // ─── Invisible barangay boundary style ───────────────────────────────────────
 const barangayStyle: L.PathOptions = {
-  color: "transparent",
+  color: "#10b981",
   fillColor: "transparent",
   fillOpacity: 0,
-  weight: 0,
+  weight: 1.5,
+  opacity: 0.4,
 };
 
 // ─── Heatmap Legend tiers ─────────────────────────────────────────────────────
@@ -611,7 +612,7 @@ export function MapView({
                 mouseover: (e) => {
                   const target = e.target as L.Polygon;
                   target.openPopup();
-                  target.setStyle({ color: "#0d9488", fillColor: "#0d9488", fillOpacity: 0.15, weight: 1.5 });
+                  target.setStyle({ color: "#10b981", fillColor: "#10b981", fillOpacity: 0.2, weight: 2 });
                 },
                 mouseout: (e) => {
                   const target = e.target as L.Polygon;
