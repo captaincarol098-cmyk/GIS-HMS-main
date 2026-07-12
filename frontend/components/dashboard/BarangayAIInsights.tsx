@@ -273,10 +273,10 @@ export default function BarangayAIInsights() {
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <Zap className="h-6 w-6 text-teal-600" />
-          <h2 className="text-2xl font-bold text-slate-900">🤖 AI Decision Support & Insights</h2>
+          <h2 className="text-2xl font-bold text-slate-900">🤖 Decision Support & Recommendations</h2>
           <div className="flex items-center gap-1.5 ml-auto">
             <Activity className="h-4 w-4 text-green-600 animate-pulse" />
-            <span className="text-xs font-semibold text-green-600">Real-time</span>
+            <span className="text-xs font-semibold text-green-600">Active</span>
             {lastUpdated && (
               <span className="text-xs text-slate-500 ml-2">
                 Updated: {lastUpdated.toLocaleTimeString()}
@@ -303,8 +303,8 @@ export default function BarangayAIInsights() {
               <Brain className="h-5 w-5 text-white" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-white">⚡ AI Decision Support Hub</h3>
-              <p className="text-xs text-green-100 mt-0.5">RAG-powered recommendations · WHO guidelines · Real-time action items</p>
+              <h3 className="text-lg font-bold text-white">⚡ Decision Support Hub</h3>
+              <p className="text-xs text-green-100 mt-0.5">OPT Plus rule-based classification · Prevalence analysis · Recommendation engine</p>
             </div>
           </div>
 
@@ -422,7 +422,7 @@ export default function BarangayAIInsights() {
         <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border-2 border-blue-200 p-6">
           <div className="flex items-center gap-2 mb-4">
             <Sparkles className="h-5 w-5 text-blue-600" />
-            <h3 className="font-bold text-lg text-blue-900">⚡ AI-Generated Decisions & Alerts</h3>
+            <h3 className="font-bold text-lg text-blue-900">⚡ System-Generated Recommendations & Alerts</h3>
             <span className="ml-auto inline-block px-2.5 py-1 bg-blue-600 text-white rounded-full text-xs font-bold">
               {decisions.filter(d => d.status === "active").length} Active
             </span>
@@ -732,8 +732,8 @@ export default function BarangayAIInsights() {
               <Brain className="h-5 w-5 text-white" />
             </div>
             <div className="flex-1 min-w-0">
-              <h3 className="font-extrabold text-base text-white tracking-tight">AI Forecast &amp; Trend Interpretation</h3>
-              <p className="text-xs text-emerald-200 mt-0.5">RAG-powered insights · WHO standards · Local program guidelines</p>
+              <h3 className="font-extrabold text-base text-white tracking-tight">Trend Analysis & Prevalence Insights</h3>
+              <p className="text-xs text-emerald-200 mt-0.5">Rule-based classification · OPT Plus standards · Prevalence analysis</p>
             </div>
           </div>
 
@@ -841,7 +841,7 @@ export default function BarangayAIInsights() {
       {/* Footer */}
       <div className="bg-slate-50 rounded-lg p-4 border border-slate-200 text-xs text-slate-600">
         <p>
-          💡 <strong>About:</strong> AI analysis using RAG with WHO standards, NNC guidelines, and local programs. Data refreshes every 10 seconds for real-time insights.
+          💡 <strong>About:</strong> Recommendations using OPT Plus rule-based classification and prevalence analysis. Decision support implements 6-step process based on nutritional status and malnutrition prevalence thresholds.
         </p>
       </div>
     </div>

@@ -173,21 +173,21 @@ export default function DashboardPage() {
     enabled: !isSuperAdmin,
   });
 
-  // Super admin AI insights (realtime with auto-read and auto-detect)
+  // Super admin decision support insights (rule-based analysis)
   const aiInsightsQuery = useQuery({
     queryKey: ["dashboard-ai-insights", selectedYear],
     queryFn: async () => {
-      console.log(`🔍 [Dashboard] Fetching SuperAdmin AI Insights for year ${selectedYear}`);
+      console.log(`🔍 [Dashboard] Fetching SuperAdmin Decision Support Insights for year ${selectedYear}`);
       const response = await api.get(`/api/dashboard/superadmin/ai-insights?year=${selectedYear}`);
-      console.log("✅ [Dashboard] AI Insights fetched (REALTIME AUTO-DETECT):", response.data);
+      console.log("✅ [Dashboard] Decision Support Insights fetched (Rule-Based Classification):", response.data);
       return response.data;
     },
-    refetchInterval: 5_000,  // ⚡ REALTIME: Refresh every 5 seconds for auto-detect
+    refetchInterval: 30_000,  // Refresh every 30 seconds for rule-based analysis
     refetchOnWindowFocus: true,  // Auto-refresh when user focuses window
     refetchOnReconnect: true,  // Auto-refresh when reconnecting
     refetchIntervalInBackground: true,  // Keep polling in background
     staleTime: 0,  // Always treat data as stale - forces refetch
-    gcTime: 1000,  // Minimal cache - almost no caching
+    gcTime: 5000,  // Cache for 5 seconds minimum
     enabled: isSuperAdmin,
     retry: 3,
     retryDelay: 1000,

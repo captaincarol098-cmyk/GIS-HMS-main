@@ -44,9 +44,9 @@ const STATUS_COLORS: Record<string, string> = {
   'At Risk': '#f59e0b',
   'Moderate Malnutrition': '#ef4444',
   'Severe Malnutrition': '#991b1b',
-  'Stunted': '#8b5cf6',
-  'Wasted': '#f97316',
-  'Underweight': '#06b6d4',
+  'Stunted': '#FF8C00',  // Deep Orange (from theme)
+  'Wasted': '#FF8C00',   // Deep Orange (from theme)
+  'Underweight': '#FF8C00', // Deep Orange (from theme)
 };
 
 export function ChildNutritionalSummary({ data }: { data?: ChildNutritionalSummaryData }) {

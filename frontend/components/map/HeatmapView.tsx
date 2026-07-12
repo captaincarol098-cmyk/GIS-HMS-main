@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import L from "leaflet";
 import { MapContainer, TileLayer, Polygon, useMap } from "react-leaflet";
@@ -267,6 +268,13 @@ function IDWCanvasLayer({ data }: { data: BarangaySeverity[] }) {
       marker.on("mouseover", (e) => { marker.bindPopup(popup).openPopup(e.latlng); });
       marker.on("mousemove", (e) => { popup.setLatLng(e.latlng); });
       marker.on("mouseout",  ()  => { marker.closePopup(); });
+      
+      // Add click handler for navigation (superadmin only)
+      marker.on("click", () => {
+        // Click event will be handled by the map-level click listener below
+        // Just ensure the marker is clickable
+        (marker as any).fire("markerclick", { barangayName: b.name });
+      });
 
       group.addLayer(marker);
     });
@@ -287,6 +295,65 @@ type AccuracyData = {
   is_reliable: boolean;
   message: string;
 };
+
+// ─── Click handler for marker labels (navigate to barangay) ──────────────────
+function HeatmapClickHandler({ 
+  barangayList, 
+  user 
+}: { 
+  barangayList: BarangaySeverity[];
+  user: any;
+}) {
+  const router = useRouter();
+  const map = useMap();
+
+  useEffect(() => {
+    if (!map || !barangayList || barangayList.length === 0) return;
+
+    const handleMapClick = (e: L.LeafletMouseEvent) => {
+      const clickLat = e.latlng.lat;
+      const clickLng = e.latlng.lng;
+
+      // Check if click is near any barangay center (within ~0.01 degrees, ~1.1km)
+      const threshold = 0.01;
+      let closestBarangay: BarangaySeverity | null = null;
+      let closestDistance = threshold;
+
+      for (const b of barangayList) {
+        if (!b.lat || !b.lng) continue;
+        const dist = Math.sqrt((clickLat - b.lat) ** 2 + (clickLng - b.lng) ** 2);
+        if (dist < closestDistance) {
+          closestDistance = dist;
+          closestBarangay = b;
+        }
+      }
+
+      if (!closestBarangay) return;
+
+      console.log('[HeatmapClickHandler] BARANGAY CLICKED:', {
+        userRole: user?.role,
+        barangayName: closestBarangay.name,
+        lat: closestBarangay.lat,
+        lng: closestBarangay.lng
+      });
+
+      if (user?.role === "super_admin") {
+        // Navigate to barangay-focused map
+        const barangayName = encodeURIComponent(closestBarangay.name);
+        const url = `/map?barangay=${barangayName}`;
+        console.log('[HeatmapClickHandler] Navigating to:', url);
+        router.push(url);
+      }
+    };
+
+    map.on('click', handleMapClick);
+    return () => {
+      map.off('click', handleMapClick);
+    };
+  }, [map, barangayList, user?.role, router]);
+
+  return null;
+}
 
 function AccuracyGate({ barangayId }: { barangayId?: string }) {
   const { data: accuracy, isLoading } = useQuery<AccuracyData>({
@@ -412,6 +479,9 @@ export function HeatmapView() {
         <MapContainer {...CABADBARAN_MAP_OPTIONS} className={CABADBARAN_MAP_CLASS}>
           <MapCenterController center={mapCenter} zoom={mapZoom} />
           <TileLayer key={tileKey} attribution={tile.attribution} url={tile.url} />
+          
+          {/* Click handler for marker/label navigation */}
+          {barangayList.length > 0 && <HeatmapClickHandler barangayList={barangayList} user={user} />}
 
           {/* Dark mask outside Cabadbaran bounds */}
           <Polygon

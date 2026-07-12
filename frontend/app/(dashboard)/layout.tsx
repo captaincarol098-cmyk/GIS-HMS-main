@@ -41,7 +41,9 @@ import {
   EyeOff,
   ChevronLeft,
   ChevronRight,
-  Weight
+  Weight,
+  Play,
+  Pause
 } from "lucide-react";
 import { useAuthStore } from "@/store/auth";
 
@@ -63,6 +65,141 @@ interface ToastMessage {
   type: "alert" | "log";
 }
 
+// Nutrition Banner Component
+function NutritionBanner() {
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [isAutoPlay, setIsAutoPlay] = useState(true);
+  
+  const bannerData = [
+    {
+      image: "/image1.jpg",
+      motto: "Good Nutrition, Healthy Future",
+      icon: "🥗",
+      color: "from-green-600 to-emerald-600"
+    },
+    {
+      image: "/image2.jpg",
+      motto: "Every Child Deserves Better Health",
+      icon: "❤️",
+      color: "from-red-600 to-pink-600"
+    }
+  ];
+
+  useEffect(() => {
+    if (!isAutoPlay) return;
+    
+    const interval = setInterval(() => {
+      setCurrentImageIndex((prev) => (prev + 1) % bannerData.length);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [isAutoPlay, bannerData.length]);
+
+  const currentBanner = bannerData[currentImageIndex];
+
+  return (
+    <div className="shrink-0 space-y-2.5 px-3 pb-3 overflow-hidden">
+      
+      {/* Main Banner Card */}
+      <div className="relative w-full overflow-hidden rounded-lg shadow-lg border-2 border-brandLightGreen/40 hover:border-brandLightGreen/70 transition-colors group">
+        
+        {/* Banner Image Container - Enhanced */}
+        <div className="relative w-full h-40 overflow-hidden bg-gradient-to-br from-slate-700 to-slate-900">
+          {/* Current Image - No scroll, centered */}
+          <img
+            key={`banner-${currentImageIndex}`}
+            src={currentBanner.image}
+            alt="Nutrition banner"
+            className="w-full h-full object-cover object-center transition-all duration-1000 ease-in-out hover:scale-105 pointer-events-none"
+          />
+          
+          {/* Subtle overlay only */}
+          <div className={`absolute inset-0 bg-gradient-to-t ${currentBanner.color} opacity-15 mix-blend-overlay`} />
+          
+          {/* Vignette effect for better image visibility */}
+          <div className="absolute inset-0 bg-radial-gradient to-transparent opacity-40" style={{
+            background: "radial-gradient(ellipse at center, transparent 0%, rgba(0,0,0,0.3) 100%)"
+          }} />
+        </div>
+
+        {/* Navigation Arrows - Enhanced */}
+        <button
+          onClick={() => {
+            setCurrentImageIndex((prev) => (prev - 1 + bannerData.length) % bannerData.length);
+            setIsAutoPlay(false);
+          }}
+          className="absolute left-2 top-1/2 -translate-y-1/2 z-20 bg-white/30 hover:bg-white/50 text-white p-2 rounded-full backdrop-blur-md transition-all opacity-0 group-hover:opacity-100 shadow-lg"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        
+        <button
+          onClick={() => {
+            setCurrentImageIndex((prev) => (prev + 1) % bannerData.length);
+            setIsAutoPlay(false);
+          }}
+          className="absolute right-2 top-1/2 -translate-y-1/2 z-20 bg-white/30 hover:bg-white/50 text-white p-2 rounded-full backdrop-blur-md transition-all opacity-0 group-hover:opacity-100 shadow-lg"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </button>
+
+        {/* Auto-play toggle - Enhanced */}
+        <button
+          onClick={() => setIsAutoPlay(!isAutoPlay)}
+          className="absolute top-2.5 right-2.5 z-20 bg-white/30 hover:bg-white/50 text-white p-1.5 rounded-full backdrop-blur-md transition-all shadow-lg"
+          title={isAutoPlay ? "Pause auto-play" : "Resume auto-play"}
+        >
+          {isAutoPlay ? (
+            <Pause className="h-3 w-3" />
+          ) : (
+            <Play className="h-3 w-3" />
+          )}
+        </button>
+      </div>
+
+      {/* Motto Below Image - VISIBLE with border */}
+      <div 
+        className="text-center px-3 py-2.5 bg-gradient-to-r from-white/5 to-white/5 backdrop-blur-sm border border-brandLightGreen/30 rounded-lg hover:border-brandLightGreen/60 transition-colors"
+        style={{
+          fontFamily: "'Poppins', 'Segoe UI', sans-serif",
+          fontSize: "12px",
+          fontWeight: "600",
+          letterSpacing: "0.4px"
+        }}
+      >
+        <p className="text-white/90 leading-relaxed">{currentBanner.motto}</p>
+      </div>
+
+      {/* Progress bar - Enhanced */}
+      <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden shadow-inner">
+        <div
+          className={`h-full bg-gradient-to-r ${currentBanner.color} transition-all duration-500 shadow-lg`}
+          style={{ width: `${((currentImageIndex + 1) / bannerData.length) * 100}%` }}
+        />
+      </div>
+
+      {/* Indicator Dots - Enhanced */}
+      <div className="flex justify-center gap-2 items-center">
+        {bannerData.map((_, idx) => (
+          <button
+            key={idx}
+            onClick={() => {
+              setCurrentImageIndex(idx);
+              setIsAutoPlay(false);
+            }}
+            className={`transition-all duration-300 rounded-full ${
+              idx === currentImageIndex
+                ? `w-7 h-2.5 bg-gradient-to-r ${bannerData[idx].color} shadow-lg`
+                : "w-2 h-2 bg-white/30 hover:bg-white/70"
+            }`}
+            title={bannerData[idx].motto}
+          />
+        ))}
+      </div>
+
+    </div>
+  );
+}
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -72,12 +209,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [previousLogIds, setPreviousLogIds] = useState<string[]>([]);
   const [isOnline, setIsOnline] = useState(true);
   const [pendingSync, setPendingSync] = useState(0);
-  const [currentTime, setCurrentTime] = useState(new Date());
+  const [currentTime, setCurrentTime] = useState<Date | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showNotifications, setShowNotifications] = useState(false);
 
-  // Date and Time ticker
+  // Date and Time ticker - Initialize on client side only to avoid hydration mismatch
   useEffect(() => {
+    // Set initial time on mount (client side only)
+    setCurrentTime(new Date());
+    
+    // Update time every 60 seconds
     const timer = setInterval(() => {
       setCurrentTime(new Date());
     }, 60000);
@@ -283,7 +424,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     items = [...adminMenuItems, ...adminNav];
   }
 
-  const formatDate = (date: Date) => {
+  const formatDate = (date: Date | null) => {
+    if (!date) return "";
     return date.toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
@@ -291,7 +433,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     });
   };
 
-  const formatDayTime = (date: Date) => {
+  const formatDayTime = (date: Date | null) => {
+    if (!date) return "";
     const day = date.toLocaleDateString("en-US", { weekday: "short" });
     const time = date.toLocaleTimeString("en-US", {
       hour: "numeric",
@@ -315,21 +458,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <div className="flex h-screen flex-col overflow-hidden bg-slate-50 font-sans">
       
       {/* Top Header - Styled in Green */}
-      <header className="flex h-28 shrink-0 items-center justify-between bg-[#1b4324] px-4 text-white shadow-md z-10 border-b border-white/10">
+      <header className="flex h-28 shrink-0 items-start justify-between bg-[#1b4324] px-4 text-white shadow-md z-10 border-b border-white/10">
         
         {/* Left header segment - Logo and Title */}
-        <div className="flex items-center gap-2">
-          {/* Logo */}
+        <div className="flex items-center gap-3 pt-2">
+          {/* Combined Logo */}
           <img 
-            src="/cabadbaran-seal.png" 
-            alt="Cabadbaran City Seal" 
-            className="h-24 w-24 object-contain drop-shadow-lg"
+            src="/logos.png" 
+            alt="Cabadbaran Health Logo" 
+            className="h-24 w-auto object-contain drop-shadow-lg flex-shrink-0"
           />
           
           {/* Title Section */}
-          <div>
+          <div className="flex-1">
             <h1 className="text-lg font-black text-white uppercase leading-tight tracking-tighter">
-              HEALTH MONITORING SYSTEM FOR CHILD MALNUTRITION CASES
+              HEALTH MONITORING SYSTEM FOR CHILD MALNUTRITION MANAGEMENT CASES
             </h1>
             <p className="text-sm text-brandLightGreen font-bold mt-2 tracking-tight">
               City Health Office, Cabadbaran City
@@ -337,8 +480,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </div>
 
-        {/* Right header segment */}
-        <div className="flex items-center gap-4">
+        {/* Right header segment - Positioned at top right */}
+        <div className="flex items-start gap-4 pt-1">
           
           {/* Notifications Icon Card */}
           <div className="relative">
@@ -460,11 +603,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             )}
           </div>
 
-          {/* Date & Time display */}
-          <div className="hidden md:flex flex-col bg-white/10 border border-white/20 rounded-xl px-3 py-1 text-center leading-tight" suppressHydrationWarning>
-            <p className="text-[10px] font-bold text-white tracking-wide">{formatDate(currentTime)}</p>
-            <p className="text-[9px] font-semibold text-brandLightGreen mt-0.5">{formatDayTime(currentTime)}</p>
-          </div>
+          {/* Date & Time display - Only rendered on client after hydration */}
+          {currentTime ? (
+            <div className="hidden md:flex flex-col bg-white/10 border border-white/20 rounded-xl px-3 py-1 text-center leading-tight">
+              <p className="text-[10px] font-bold text-white tracking-wide">{formatDate(currentTime)}</p>
+              <p className="text-[9px] font-semibold text-brandLightGreen mt-0.5">{formatDayTime(currentTime)}</p>
+            </div>
+          ) : null}
 
           {/* Profile Badge in Header */}
           <div className="flex items-center gap-2 bg-white/10 hover:bg-white/15 px-3 py-1.5 rounded-full border border-white/20 cursor-pointer transition-colors">
@@ -612,42 +757,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               })}
             </nav>
 
-            {/* Quick Actions Section - Fixed at bottom */}
-            <div className="shrink-0 px-3 py-3 border-t border-white/20">
-              
-              {/* Quick Actions Title */}
-              <div className="px-2 py-1 bg-white/5 rounded-lg border border-white/5 mb-2">
-                <p className="text-[9px] font-black text-brandLightGreen uppercase tracking-widest leading-none">Quick Actions</p>
-              </div>
-
-              {/* Quick Actions Buttons Panel */}
-              <div className="space-y-1.5">
-                <div className="flex gap-1.5">
-                  <button 
-                    onClick={() => router.push("/assessments")}
-                    className="flex-1 flex items-center justify-center gap-1 bg-[#4CAF50] hover:bg-[#43a047] active:scale-[0.98] text-white font-extrabold py-2 px-1.5 rounded-lg text-[9px] transition-all shadow-sm leading-none"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    <span>Assessment</span>
-                  </button>
-                  <button 
-                    onClick={() => router.push("/children")}
-                    className="flex-1 flex items-center justify-center gap-1 bg-[#1976D2] hover:bg-[#1565c0] active:scale-[0.98] text-white font-extrabold py-2 px-1.5 rounded-lg text-[9px] transition-all shadow-sm leading-none"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    <span>Child</span>
-                  </button>
-                </div>
-
-                <button 
-                  onClick={() => router.push("/program-activities")}
-                  className="w-full flex items-center justify-center gap-1 bg-[#FB8C00] hover:bg-[#f57c00] active:scale-[0.98] text-white font-extrabold py-2 px-2 rounded-lg text-[9px] transition-all shadow-sm leading-none"
-                >
-                  <Calendar className="h-3.5 w-3.5" />
-                  <span>Program</span>
-                </button>
-              </div>
-
+            {/* Nutrition Banner Section - Fixed at bottom */}
+            <div className="border-t-2 border-brandLightGreen pt-3 pb-3">
+              <NutritionBanner />
             </div>
           </div>
 

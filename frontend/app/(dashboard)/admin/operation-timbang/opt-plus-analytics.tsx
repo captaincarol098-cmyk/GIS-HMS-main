@@ -168,6 +168,25 @@ export function OptPlusAnalytics({ selectedYear }: { selectedYear: number }) {
 
   return (
     <div className="space-y-6">
+      {/* Feature Highlight - Nutritional Status Analytics */}
+      <div className="bg-gradient-to-r from-blue-50 to-cyan-50 border-2 border-blue-300 rounded-xl p-5 mb-4">
+        <div className="flex items-start gap-3">
+          <span className="text-3xl">🏥</span>
+          <div className="flex-1">
+            <h3 className="font-bold text-blue-900 text-base mb-2">✨ Nutritional Status Analytics</h3>
+            <p className="text-sm text-blue-800 mb-3 leading-relaxed">
+              Advanced real-time nutritional assessment of children aged 0-59 months using WHO standards. Tracks Weight-for-Age (WFA), Height-for-Age (HFA), and Weight-for-Height/Length (WHZ) to identify and address malnutrition across all barangays.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <span className="px-3 py-1 bg-blue-200 text-blue-900 text-xs font-bold rounded-full">🌍 WHO Standards</span>
+              <span className="px-3 py-1 bg-cyan-200 text-cyan-900 text-xs font-bold rounded-full">⚡ Real-Time Data</span>
+              <span className="px-3 py-1 bg-sky-200 text-sky-900 text-xs font-bold rounded-full">📊 Age Group Analysis</span>
+              <span className="px-3 py-1 bg-blue-200 text-blue-900 text-xs font-bold rounded-full">👥 Gender Breakdown</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-extrabold text-slate-900 flex items-center gap-2">
@@ -204,6 +223,9 @@ export function OptPlusAnalytics({ selectedYear }: { selectedYear: number }) {
             </div>
             <span className="text-xs font-bold text-slate-600">{wfaSeverity.label}</span>
           </div>
+          <p className="text-xs text-slate-600 mt-3 leading-relaxed">
+            Measures overall nutritional status combining underweight and overweight. {wfaAffected > 10 ? "High prevalence suggests dietary insufficiency or excess." : "Good nutritional balance detected."}
+          </p>
         </div>
 
         {/* HFA Card */}
@@ -225,6 +247,9 @@ export function OptPlusAnalytics({ selectedYear }: { selectedYear: number }) {
             </div>
             <span className="text-xs font-bold text-slate-600">{hfaSeverity.label}</span>
           </div>
+          <p className="text-xs text-slate-600 mt-3 leading-relaxed">
+            Indicates chronic malnutrition or long-term nutritional deficiency. {hfaAffected > 10 ? "Stunting suggests inadequate nutrition during growth phase." : "Growth trajectory appears normal."}
+          </p>
         </div>
 
         {/* WHZ Card */}
@@ -246,6 +271,9 @@ export function OptPlusAnalytics({ selectedYear }: { selectedYear: number }) {
             </div>
             <span className="text-xs font-bold text-slate-600">{whzSeverity.label}</span>
           </div>
+          <p className="text-xs text-slate-600 mt-3 leading-relaxed">
+            Reflects acute malnutrition (recent nutritional issues). {whzAffected > 10 ? "High prevalence requires immediate intervention." : "Acute malnutrition well controlled."}
+          </p>
         </div>
       </div>
 
@@ -274,6 +302,11 @@ export function OptPlusAnalytics({ selectedYear }: { selectedYear: number }) {
               </PieChart>
             </ResponsiveContainer>
           </div>
+          <div className="mt-4 p-3 bg-slate-50 rounded border border-slate-200">
+            <p className="text-xs text-slate-700">
+              <span className="font-semibold">📊 Interpretation:</span> This pie chart shows the proportion of children in three nutritional categories. The larger the green section, the better the overall nutritional status. Orange and red sections indicate children requiring intervention.
+            </p>
+          </div>
         </div>
 
         {/* WFA Status Breakdown */}
@@ -293,6 +326,11 @@ export function OptPlusAnalytics({ selectedYear }: { selectedYear: number }) {
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
+          </div>
+          <div className="mt-4 p-3 bg-slate-50 rounded border border-slate-200">
+            <p className="text-xs text-slate-700">
+              <span className="font-semibold">⚖️ Interpretation:</span> WFA combines weight and age to assess overall nutrition. Underweight children need calorie-rich foods; overweight children need balanced, portion-controlled diets.
+            </p>
           </div>
         </div>
 
@@ -314,6 +352,11 @@ export function OptPlusAnalytics({ selectedYear }: { selectedYear: number }) {
               </BarChart>
             </ResponsiveContainer>
           </div>
+          <div className="mt-4 p-3 bg-slate-50 rounded border border-slate-200">
+            <p className="text-xs text-slate-700">
+              <span className="font-semibold">📏 Interpretation:</span> HFA reflects chronic malnutrition/stunting. Stunted children need sustained nutritional support over months. Stunting in early childhood can cause lifelong developmental impacts.
+            </p>
+          </div>
         </div>
 
         {/* WHZ Status Breakdown */}
@@ -333,6 +376,11 @@ export function OptPlusAnalytics({ selectedYear }: { selectedYear: number }) {
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
+          </div>
+          <div className="mt-4 p-3 bg-slate-50 rounded border border-slate-200">
+            <p className="text-xs text-slate-700">
+              <span className="font-semibold">⚖️ Interpretation:</span> WHZ is the most responsive indicator of acute malnutrition. Wasted children need immediate intervention; recovery is possible within weeks with proper nutrition.
+            </p>
           </div>
         </div>
       </div>
@@ -376,6 +424,17 @@ export function OptPlusAnalytics({ selectedYear }: { selectedYear: number }) {
             </tbody>
           </table>
         </div>
+        <div className="bg-slate-50 p-4 border-t border-slate-200">
+          <p className="text-xs text-slate-700 mb-2">
+            <span className="font-semibold">💡 What does this mean?</span>
+          </p>
+          <ul className="text-xs text-slate-600 space-y-1">
+            <li>• <span className="font-semibold">Normal:</span> Child's weight is appropriate for age - continue regular feeding</li>
+            <li>• <span className="font-semibold">Underweight:</span> Child needs calorie-rich foods, frequent feeding, and monitoring</li>
+            <li>• <span className="font-semibold">Severely Underweight:</span> Urgent intervention needed - nutritional supplementation and medical evaluation recommended</li>
+            <li>• <span className="font-semibold">Overweight:</span> Reduce high-calorie foods, encourage physical activity, increase fruits/vegetables</li>
+          </ul>
+        </div>
       </div>
 
       {/* HFA Detail Table */}
@@ -414,6 +473,17 @@ export function OptPlusAnalytics({ selectedYear }: { selectedYear: number }) {
               })}
             </tbody>
           </table>
+        </div>
+        <div className="bg-slate-50 p-4 border-t border-slate-200">
+          <p className="text-xs text-slate-700 mb-2">
+            <span className="font-semibold">💡 What does this mean?</span>
+          </p>
+          <ul className="text-xs text-slate-600 space-y-1">
+            <li>• <span className="font-semibold">Normal:</span> Child's growth trajectory is healthy for age</li>
+            <li>• <span className="font-semibold">Stunted:</span> Chronic malnutrition evident - requires sustained nutritional intervention and protein-rich foods</li>
+            <li>• <span className="font-semibold">Severely Stunted:</span> Long-term nutritional deficit - needs intensive feeding program and medical assessment</li>
+            <li>• <span className="font-semibold">Tall:</span> Child is taller than expected - monitor for obesity if combined with high weight</li>
+          </ul>
         </div>
       </div>
 
@@ -454,6 +524,17 @@ export function OptPlusAnalytics({ selectedYear }: { selectedYear: number }) {
               })}
             </tbody>
           </table>
+        </div>
+        <div className="bg-slate-50 p-4 border-t border-slate-200">
+          <p className="text-xs text-slate-700 mb-2">
+            <span className="font-semibold">💡 What does this mean?</span>
+          </p>
+          <ul className="text-xs text-slate-600 space-y-1">
+            <li>• <span className="font-semibold">Normal:</span> Child's weight is healthy for their height - continue current feeding pattern</li>
+            <li>• <span className="font-semibold">Moderately Wasted:</span> Acute malnutrition present - increase meal frequency and calorie density</li>
+            <li>• <span className="font-semibold">Severely Wasted:</span> Medical emergency - immediate hospitalization and therapeutic feeding required</li>
+            <li>• <span className="font-semibold">Overweight/Obese:</span> Excess weight for height - emphasize balanced diet and active play</li>
+          </ul>
         </div>
       </div>
 

@@ -104,15 +104,23 @@ async def summary(
     barangays_online = 24
     barangays_need_attention = 3
     if not barangay_id:
-        # Check active alerts per barangay to count needing attention
+        # Check active alerts per barangay to count needing attention (BATCHED - no N+1)
         brgys = (await db.scalars(select(Barangay).where(~Barangay.name.in_(EXCLUDED_BARANGAYS)))).all()
         barangays_online = len(brgys)
-        need_att = 0
-        for b in brgys:
-            b_alerts = await db.scalar(select(func.count(Alert.id)).join(Child, Child.id == Alert.child_id).where(Child.barangay_id == b.id).where(Alert.is_resolved.is_(False))) or 0
-            if b_alerts > 0:
-                need_att += 1
-        barangays_need_attention = need_att
+        
+        # Batch query: Get alert counts for all barangays in ONE query
+        alert_counts_stmt = (
+            select(Child.barangay_id, func.count(Alert.id).label("alert_count"))
+            .select_from(Alert)
+            .join(Child, Child.id == Alert.child_id)
+            .where(Alert.is_resolved.is_(False))
+            .group_by(Child.barangay_id)
+        )
+        alert_counts_rows = await db.execute(alert_counts_stmt)
+        alert_counts_map = {row[0]: row[1] for row in alert_counts_rows}
+        
+        # Count barangays with alerts
+        barangays_need_attention = len([b for b in brgys if alert_counts_map.get(b.id, 0) > 0])
         
     base_summary.update({
         "active_cases": active_cases,

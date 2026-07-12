@@ -555,18 +555,23 @@ async def get_opt_plus_report(
                 "count": children_by_age_group[age_group]
             })
         
-        # Get location info (assuming all barangays are in same municipality/region/province)
-        municipality = "San Vicente"  # Placeholder
-        region = "Region X (Northern Mindanao)"  # Placeholder
-        province = "Misamis Oriental"  # Placeholder
-        psgc = "103674000"  # Placeholder
+        # Get location info - get from Cabadbaran City configuration
+        # Assuming Cabadbaran City is the primary municipality
+        municipality = "Cabadbaran City"
+        region = "Region XIII (CARAGA)"
+        province = "Agusan del Norte"
+        psgc = "053812000"  # Cabadbaran City PSGC code
         
-        # Calculate coverage percentage - if no children measured, default to 0
+        # Calculate coverage percentage
+        # Coverage = (children measured / expected children 0-59m in area) * 100
+        # Expected children = 12% of total population (demographic standard)
+        expected_children_0_59 = max(1, total_population * 0.12)
+        
         if children_0_59_months > 0:
-            coverage_percentage = (children_0_59_months / max(1, (total_population * 0.12))) * 100
+            coverage_percentage = (children_0_59_months / expected_children_0_59) * 100
             coverage_percentage = min(100, coverage_percentage)  # Cap at 100%
         else:
-            coverage_percentage = 0
+            coverage_percentage = 0.0
         
         return {
             "province": province,

@@ -1,11 +1,14 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { MapContainer, TileLayer, Marker, Polygon, GeoJSON, Popup, useMap } from "react-leaflet";
 import { useQuery } from "@tanstack/react-query";
 import L from "leaflet";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/auth";
+import { STATUS_COLORS, getStatusColor } from "@/lib/theme";
+import { X, MapPin, Users, Home, Activity } from "lucide-react";
 import {
   CABADBARAN_CENTER,
   CABADBARAN_MAP_CLASS,
@@ -31,6 +34,38 @@ function MapCenterController({ center, zoom }: { center: [number, number]; zoom:
   return null;
 }
 
+// ─── Popup positioning helper ────────────────────────────────────────────────
+function positionPopupToRight(popup: L.Popup, map: L.Map) {
+  if (!popup || !map) return;
+  try {
+    const popupElement = (popup as any)._container as HTMLElement;
+    if (!popupElement) return;
+    
+    // Get map dimensions
+    const mapContainer = map.getContainer();
+    const mapWidth = mapContainer.offsetWidth;
+    
+    // Get popup position and dimensions
+    const popupRect = popupElement.getBoundingClientRect();
+    const mapRect = mapContainer.getBoundingClientRect();
+    
+    // Calculate if popup will go offscreen on the right
+    const rightEdge = popupRect.left + popupRect.width - mapRect.left;
+    
+    // If popup goes offscreen on right, position it to the left instead
+    if (rightEdge > mapWidth - 40) {
+      popupElement.classList.add('leaflet-popup-left');
+      popupElement.classList.remove('leaflet-popup-right');
+    } else {
+      // Position to the right (default)
+      popupElement.classList.add('leaflet-popup-right');
+      popupElement.classList.remove('leaflet-popup-left');
+    }
+  } catch (err) {
+    console.warn('[positionPopupToRight] Error:', err);
+  }
+}
+
 // ─── Layer switcher ───────────────────────────────────────────────────────────
 function LayerSwitcher({ active, onChange }: { active: TileLayerKey; onChange: (k: TileLayerKey) => void }) {
   return (
@@ -52,6 +87,7 @@ function LayerSwitcher({ active, onChange }: { active: TileLayerKey; onChange: (
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type BarangaySeverity = {
+  id?: string;
   alert_count: number;
   malnutrition_count: number;
   moderate_count: number;
@@ -65,20 +101,12 @@ type BarangaySeverity = {
 };
 
 // ─── Malnutrition status colours (markers) ───────────────────────────────────
-const STATUS_COLOR: Record<string, string> = {
-  severe_acute_malnutrition:   "#dc2626",
-  moderate_acute_malnutrition: "#f97316",
-  normal:                      "#22c55e",
-};
-
-function getStatusColor(status: string | undefined): string {
-  if (!status) return STATUS_COLOR.normal;
-  return STATUS_COLOR[status] ?? STATUS_COLOR.normal;
-}
+// Now uses centralized theme - import is at top of file
 
 // ─── SVG pin marker ───────────────────────────────────────────────────────────
 function pinIcon(status: string | undefined) {
-  const colour = getStatusColor(status);
+  const colorObj = getStatusColor(status);
+  const colour = colorObj.hex;
   const svg = encodeURIComponent(
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 36">
       <path d="M12 0C5.4 0 0 5.4 0 12c0 9 12 24 12 24S24 21 24 12C24 5.4 18.6 0 12 0z"
@@ -95,12 +123,14 @@ function pinIcon(status: string | undefined) {
 }
 
 // ─── Invisible barangay boundary style ───────────────────────────────────────
+// NOTE: Must have non-zero opacity for Leaflet to fire mouse events!
+// Using low opacity (0.05) to maintain interactivity while staying nearly invisible
 const barangayStyle: L.PathOptions = {
   color: "#10b981",
-  fillColor: "transparent",
-  fillOpacity: 0,
+  fillColor: "#10b981",
+  fillOpacity: 0.05,  // Increased from 0.01 to 0.05 for better event detection
   weight: 1.5,
-  opacity: 0.4,
+  opacity: 0.05,      // Increased from 0.01 to 0.05 for better event detection
 };
 
 // ─── Heatmap Legend tiers ─────────────────────────────────────────────────────
@@ -496,6 +526,449 @@ function LayerIconsOverlay({
   return null;
 }
 
+// ─── Helper: detect clicked feature and navigate ─────────────────────────────
+// NOTE: Removed - BarangayGeoJSON component handles all click/hover events via onEachFeature
+// function MapClickHandler({ 
+//   data, 
+//   user 
+// }: { 
+//   data: any;
+//   user: any;
+// }) {
+//   const router = useRouter();
+//   const map = useMap();
+//
+//   useEffect(() => {
+//     if (!map || !data) return;
+//     // ... rest of function commented out
+//   }, [map, data, user?.role, router]);
+//
+//   return null;
+// }
+
+// Helper function for point-in-polygon detection
+// NOTE: Not used anymore since BarangayGeoJSON handles all interactions
+// function pointInPolygon(point: [number, number], ringCoordinates: number[][]): boolean {
+//   const [x, y] = point;
+//   const ring = ringCoordinates; // These are already the ring coordinates
+//   let inside = false;
+
+//   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+//     const xi = ring[i][0];
+//     const yi = ring[i][1];
+//     const xj = ring[j][0];
+//     const yj = ring[j][1];
+
+//     const intersect = ((yi > y) !== (yj > y)) && (x < ((xj - xi) * (y - yi)) / (yj - yi) + xi);
+//     if (intersect) inside = !inside;
+//   }
+
+//   return inside;
+// }
+
+// ─── Custom Hover Overlay Component (Canvas-based) ───────────────────────────
+function HoverOverlay({ 
+  hoveredFeature, 
+  mousePosition 
+}: { 
+  hoveredFeature: any | null;
+  mousePosition: { x: number; y: number } | null;
+}) {
+  if (!hoveredFeature || !mousePosition) return null;
+
+  const props = hoveredFeature.properties as BarangaySeverity;
+  
+  // Get risk info styling
+  const riskInfo = getRiskLevelInfo(props.risk_level || 'low');
+  const tier = TIERS.find((t) => props.malnutrition_count >= t.min && props.malnutrition_count <= t.max) ?? TIERS[0];
+  const newsIndicators = buildNewsIndicators(props);
+  
+  // Calculate additional metrics
+  const malnutritionPercentage = props.total_children > 0 
+    ? ((props.malnutrition_count / props.total_children) * 100).toFixed(1) 
+    : "0.0";
+  const severePercentage = props.total_children > 0 
+    ? ((props.severe_count / props.total_children) * 100).toFixed(1) 
+    : "0.0";
+  const moderatePercentage = props.total_children > 0 
+    ? ((props.moderate_count / props.total_children) * 100).toFixed(1) 
+    : "0.0";
+  
+  // Determine position (left or right of cursor)
+  const rightEdgeBarangays = ['Del Pilar', 'Poblacion 8', 'Poblacion 10', 'Katugasan'];
+  const showLeft = rightEdgeBarangays.includes(props.name);
+  
+  const overlayStyle: React.CSSProperties = {
+    position: 'fixed',
+    left: showLeft ? mousePosition.x - 580 : mousePosition.x + 20,
+    top: mousePosition.y - 180,
+    maxWidth: '560px',
+    minWidth: '540px',
+    backgroundColor: 'white',
+    border: `3px solid ${riskInfo.color}`,
+    borderRadius: '12px',
+    padding: '0',
+    boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+    zIndex: 99999,
+    pointerEvents: 'none',
+    fontFamily: 'system-ui, -apple-system, sans-serif',
+  };
+
+  return (
+    <div style={overlayStyle}>
+      {/* Header */}
+      <div style={{ 
+        background: riskInfo.bg, 
+        borderBottom: `2px solid ${riskInfo.color}`,
+        padding: '10px 14px',
+        borderRadius: '9px 9px 0 0',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '8px'
+      }}>
+        <div style={{ fontWeight: 'bold', fontSize: '15px', color: '#0f172a' }}>
+          {props.name}
+        </div>
+        <div style={{ 
+          fontSize: '10px', 
+          fontWeight: '700', 
+          padding: '3px 10px', 
+          borderRadius: '12px',
+          background: 'white',
+          color: riskInfo.color,
+          border: `1.5px solid ${riskInfo.color}`,
+          whiteSpace: 'nowrap'
+        }}>
+          {riskInfo.icon} {(props.risk_level || 'low').toUpperCase()}
+        </div>
+      </div>
+      
+      {/* Main Content Grid */}
+      <div style={{ padding: '12px 14px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+          
+          {/* TOP LEFT: Algorithm-Driven Risk Prediction */}
+          <div style={{ borderLeft: '4px solid #0284c7', paddingLeft: '10px' }}>
+            <div style={{ fontSize: '10px', fontWeight: '700', color: '#0284c7', textTransform: 'uppercase', marginBottom: '5px' }}>🧠 RISK</div>
+            <div style={{ fontSize: '11px', color: '#334155', lineHeight: '1.6' }}>
+              <div style={{ marginBottom: '3px' }}><strong>Class:</strong> {(props.risk_level || 'low').toUpperCase()}</div>
+              <div style={{ marginBottom: '3px' }}><strong>Confidence:</strong> {props.malnutrition_count > 5 ? "High" : props.malnutrition_count > 0 ? "Moderate" : "Low"}</div>
+              <div style={{ fontSize: '10px' }}><strong>Trend:</strong> {props.severe_count > 2 ? "🔴 Worsening" : props.malnutrition_count > 10 ? "🟡 Stable" : "🟢 Improving"}</div>
+            </div>
+          </div>
+
+          {/* TOP MIDDLE: Nutrition Early Warning System */}
+          <div style={{ borderLeft: '4px solid #f59e0b', paddingLeft: '10px' }}>
+            <div style={{ fontSize: '10px', fontWeight: '700', color: '#92400e', textTransform: 'uppercase', marginBottom: '5px' }}>📊 NEWS</div>
+            <div style={{ fontSize: '11px', color: '#334155', lineHeight: '1.6' }}>
+              <div style={{ marginBottom: '3px' }}><strong>Undernutrition:</strong> <span style={{ color: riskInfo.color, fontWeight: '700', fontSize: '10px' }}>{newsIndicators.undernutritionStatus}</span></div>
+              <div style={{ marginBottom: '3px' }}><strong>Trend:</strong> {newsIndicators.trendIndicator}</div>
+              <div style={{ fontSize: '10px' }}><strong>Alert:</strong> {newsIndicators.alertLevel}</div>
+            </div>
+          </div>
+
+          {/* TOP RIGHT: Case Severity */}
+          <div style={{ borderLeft: '4px solid #ef4444', paddingLeft: '10px' }}>
+            <div style={{ fontSize: '10px', fontWeight: '700', color: '#7f1d1d', textTransform: 'uppercase', marginBottom: '5px' }}>⚠️ SEVERITY</div>
+            <div style={{ fontSize: '11px', color: '#334155', lineHeight: '1.6' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3px', gap: '4px' }}>
+                <span style={{ fontSize: '10px' }}>🔴 SAM:</span>
+                <span style={{ display: 'flex', gap: '3px', alignItems: 'center' }}>
+                  <strong style={{ color: '#dc2626', fontSize: '11px' }}>{props.severe_count || 0}</strong>
+                  <span style={{ fontSize: '9px', color: '#fff', background: '#dc2626', padding: '2px 4px', borderRadius: '2px', fontWeight: '700' }}>{severePercentage}%</span>
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '4px' }}>
+                <span style={{ fontSize: '10px' }}>🟠 MAM:</span>
+                <span style={{ display: 'flex', gap: '3px', alignItems: 'center' }}>
+                  <strong style={{ color: '#f97316', fontSize: '11px' }}>{props.moderate_count || 0}</strong>
+                  <span style={{ fontSize: '9px', color: '#fff', background: '#f97316', padding: '2px 4px', borderRadius: '2px', fontWeight: '700' }}>{moderatePercentage}%</span>
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* BOTTOM LEFT: Coverage & Prevalence */}
+          <div style={{ borderLeft: '4px solid #10b981', paddingLeft: '10px' }}>
+            <div style={{ fontSize: '10px', fontWeight: '700', color: '#047857', textTransform: 'uppercase', marginBottom: '5px' }}>📋 COVERAGE</div>
+            <div style={{ fontSize: '11px', color: '#334155', lineHeight: '1.7' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}><span style={{ fontSize: '10px' }}>Children Monitored:</span><strong style={{ fontSize: '11px' }}>{props.total_children || 0}</strong></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}><span style={{ fontSize: '10px' }}>Cases:</span><strong style={{ color: tier.labelColor, fontSize: '11px' }}>{props.malnutrition_count || 0}</strong></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ fontSize: '10px' }}>Prevalence Rate:</span><strong style={{ fontSize: '11px' }}>{props.prevalence_rate || 0}%</strong></div>
+            </div>
+          </div>
+
+          {/* BOTTOM MIDDLE: Heatmap Intensity */}
+          <div style={{ borderLeft: `4px solid ${tier.color}`, paddingLeft: '10px' }}>
+            <div style={{ fontSize: '10px', fontWeight: '700', color: tier.labelColor, textTransform: 'uppercase', marginBottom: '5px' }}>🔥 INTENSITY</div>
+            <div style={{ fontSize: '11px', color: '#334155', lineHeight: '1.7' }}>
+              <div style={{ marginBottom: '3px' }}><strong>Intensity Tier:</strong> <span style={{ background: tier.color, color: '#fff', padding: '3px 6px', borderRadius: '8px', fontSize: '10px', fontWeight: '700' }}>{tier.label}</span></div>
+              <div style={{ marginBottom: '3px' }}><strong>Case Range:</strong> <span style={{ fontSize: '10px' }}>{tier.range}</span></div>
+              <div style={{ fontSize: '10px' }}><strong>Status:</strong> 🔴 Monitoring</div>
+            </div>
+          </div>
+
+          {/* BOTTOM RIGHT: Summary */}
+          <div style={{ borderLeft: '4px solid #8b5cf6', paddingLeft: '10px' }}>
+            <div style={{ fontSize: '10px', fontWeight: '700', color: '#6d28d9', textTransform: 'uppercase', marginBottom: '5px' }}>📊 SUMMARY</div>
+            <div style={{ fontSize: '11px', color: '#334155', lineHeight: '1.7' }}>
+              <div style={{ marginBottom: '3px' }}><strong>Total Cases:</strong> <span style={{ fontWeight: '700', color: '#0f172a', fontSize: '11px' }}>{props.malnutrition_count || 0}</span></div>
+              <div style={{ marginBottom: '3px' }}><strong>Malnutrition %:</strong> <span style={{ fontWeight: '700', color: '#0f172a', fontSize: '11px' }}>{malnutritionPercentage}%</span></div>
+              <div style={{ fontSize: '10px' }}><strong>Overall Status:</strong> {props.risk_level === "critical" ? "🔴 Critical" : props.risk_level === "high" ? "🟠 High" : props.risk_level === "medium" ? "🟡 Medium" : "🟢 Low"}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Divider */}
+        <div style={{ height: '2px', background: '#e2e8f0', marginBottom: '10px' }}></div>
+
+        {/* Footer: Key Metrics Bar */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '10px', padding: '10px 0', fontSize: '10px' }}>
+          <div style={{ textAlign: 'center', paddingRight: '8px', borderRight: '1px solid #e2e8f0' }}>
+            <span style={{ color: '#64748b', fontWeight: '700', display: 'block', marginBottom: '4px' }}>👶 Monitored</span>
+            <div style={{ fontWeight: '700', color: '#0f172a', fontSize: '12px' }}>{props.total_children || 0}</div>
+          </div>
+          <div style={{ textAlign: 'center', padding: '0 8px', borderRight: '1px solid #e2e8f0' }}>
+            <span style={{ color: '#64748b', fontWeight: '700', display: 'block', marginBottom: '4px' }}>⚠️ Cases</span>
+            <div style={{ fontWeight: '700', color: tier.labelColor, fontSize: '12px' }}>{props.malnutrition_count || 0}</div>
+          </div>
+          <div style={{ textAlign: 'center', padding: '0 8px', borderRight: '1px solid #e2e8f0' }}>
+            <span style={{ color: '#64748b', fontWeight: '700', display: 'block', marginBottom: '4px' }}>📈 Prevalence</span>
+            <div style={{ fontWeight: '700', color: '#0f172a', fontSize: '12px' }}>{props.prevalence_rate || 0}%</div>
+          </div>
+          <div style={{ textAlign: 'center', paddingLeft: '8px' }}>
+            <span style={{ color: '#64748b', fontWeight: '700', display: 'block', marginBottom: '4px' }}>🚨 Risk Level</span>
+            <div style={{ fontWeight: '700', color: riskInfo.color, fontSize: '11px', padding: '2px 6px', background: riskInfo.bg, borderRadius: '8px', display: 'inline-block', border: `1px solid ${riskInfo.color}` }}>{(props.risk_level || 'low').toUpperCase()}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Barangay/Purok GeoJSON with click navigation ─────────────────────────────
+function BarangayGeoJSON({ 
+  data, 
+  user,
+  onHover,
+  setSelectedPurokId,
+  setShowPurokModal,
+}: { 
+  data: any; 
+  user: any;
+  onHover: (feature: any | null, position: { x: number; y: number } | null) => void;
+  setSelectedPurokId: (id: string | null) => void;
+  setShowPurokModal: (show: boolean) => void;
+}) {
+  const router = useRouter();
+  const map = useMap();
+
+  // Debug logging
+  useEffect(() => {
+    console.log('[BarangayGeoJSON] Component mounted/updated');
+    console.log('[BarangayGeoJSON] Data features count:', data?.features?.length || 0);
+    console.log('[BarangayGeoJSON] User role:', user?.role);
+    
+    // Log all features and their types
+    if (data?.features) {
+      const featureTypes = data.features.map((f: any) => ({
+        name: f.properties?.name,
+        type: f.properties?.featureType || 'barangay',
+        id: f.properties?.id
+      }));
+      console.log('[BarangayGeoJSON] All features:', featureTypes);
+    }
+  }, [data, user]);
+
+  return (
+    <GeoJSON
+      key={JSON.stringify(data)}
+      data={data}
+      interactive={true}
+      style={(feature) => {
+        // Different styles for barangays vs puroks
+        if (feature?.properties?.featureType === "purok") {
+          return {
+            color: "#f97316",      // Orange border for puroks
+            fillColor: "#fed7aa",  // Light orange fill
+            fillOpacity: 0.3,
+            weight: 2,
+            opacity: 0.8,
+            // Make puroks appear above barangays
+            pane: 'overlayPane',
+          };
+        }
+        // Barangay style - invisible boundary
+        return {
+          ...barangayStyle,
+          // Barangays stay below puroks
+          pane: 'tilePane',
+        };
+      }}
+      onEachFeature={(feature, layer) => {
+        console.log('[BarangayGeoJSON] onEachFeature called for:', feature.properties?.name);
+        try {
+          // Show permanent labels for both barangays and puroks for navigation
+          if (feature.properties?.name) {
+            const isBarangay = feature.properties?.featureType !== "purok";
+            layer.bindTooltip(feature.properties.name, {
+              permanent: true,
+              direction: "center",
+              className: isBarangay ? "barangay-label" : "purok-label",
+              opacity: 0, // Force tooltip container to be invisible
+            });
+          }
+          const props = feature.properties as BarangaySeverity;
+          // Use buildPopupHtml to ensure consistent enhanced information
+          const popupContent = buildPopupHtml(props);
+          console.log('[BarangayGeoJSON] Popup content created for:', props.name);
+          
+          // Smart offset - adjust based on barangay location to ensure visibility
+          // Format: [horizontal, vertical] where positive vertical = downward
+          let popupOffset: [number, number] = [20, 50]; // Default: 20px right, 50px down
+          
+          // For barangays on the right edge, show popup to the left
+          const rightEdgeBarangays = ['Del Pilar', 'Poblacion 8', 'Poblacion 10', 'Katugasan'];
+          if (rightEdgeBarangays.includes(props.name)) {
+            popupOffset = [-280, 50]; // Show to the left, 50px down to be more visible
+            console.log('[BarangayGeoJSON] Using LEFT offset for:', props.name);
+          }
+          
+          // Bind popup (will show on click or manual open)
+          layer.bindPopup(popupContent, { 
+            closeButton: true, 
+            autoClose: false,
+            maxWidth: 700,
+            minWidth: 550,
+            className: "map-popup map-popup-visible",
+            offset: popupOffset,
+            autoPan: false,
+            keepInView: false,
+          });
+          
+          // Create a TOOLTIP for hover (simpler, no flickering)
+          const tooltipContent = `<div style="font-weight: bold; font-size: 13px; padding: 4px 8px;">${props.name}</div>`;
+          layer.bindTooltip(tooltipContent, {
+            permanent: false,
+            direction: 'right',
+            offset: [10, 0],
+            className: 'barangay-hover-tooltip',
+            opacity: 0.95,
+          });
+          
+          layer.on({
+            mouseover: (e) => {
+              try {
+                const target = e.target as L.Polygon;
+                
+                // Get mouse position and feature
+                const mouseEvent = e.originalEvent as MouseEvent;
+                onHover(feature, { x: mouseEvent.clientX, y: mouseEvent.clientY });
+                
+                // Highlight on hover
+                const featureType = (e.target.feature?.properties?.featureType || "barangay");
+                if (featureType === "purok") {
+                  target.setStyle({ color: "#ea580c", fillColor: "#fb923c", fillOpacity: 0.5, weight: 3 });
+                } else {
+                  target.setStyle({ color: "#10b981", fillColor: "#10b981", fillOpacity: 0.2, weight: 2, opacity: 1 });
+                }
+              } catch (err) {
+                console.warn('[BarangayGeoJSON] Error on mouseover:', err);
+              }
+            },
+            mousemove: (e) => {
+              try {
+                // Update mouse position while hovering
+                const mouseEvent = e.originalEvent as MouseEvent;
+                onHover(feature, { x: mouseEvent.clientX, y: mouseEvent.clientY });
+              } catch (err) {
+                // Ignore errors
+              }
+            },
+            mouseout: (e) => {
+              try {
+                const target = e.target as L.Polygon;
+                
+                // Clear hover overlay
+                onHover(null, null);
+                
+                // Restore original style
+                const featureType = (e.target.feature?.properties?.featureType || "barangay");
+                if (featureType === "purok") {
+                  target.setStyle({ color: "#f97316", fillColor: "#fed7aa", fillOpacity: 0.3, weight: 2, opacity: 0.8 });
+                } else {
+                  target.setStyle(barangayStyle);
+                }
+              } catch (err) {
+                console.warn('[BarangayGeoJSON] Error on mouseout:', err);
+              }
+            },
+            click: (e: L.LeafletMouseEvent) => {
+              try {
+                // Stop propagation
+                L.DomEvent.stopPropagation(e);
+                
+                const target = e.target as L.Layer;
+                const props = feature.properties as BarangaySeverity;
+                
+                // Check feature type - handle both undefined and explicit values
+                const featureType = (props as any).featureType || "barangay";
+                
+                console.log('[BarangayGeoJSON] ========================================');
+                console.log('[BarangayGeoJSON] CLICK EVENT FIRED!');
+                console.log('[BarangayGeoJSON] Feature properties:', props);
+                console.log('[BarangayGeoJSON] Feature type:', featureType);
+                console.log('[BarangayGeoJSON] User role:', user?.role);
+                console.log('[BarangayGeoJSON] Feature ID:', props.id);
+                console.log('[BarangayGeoJSON] Feature name:', props.name);
+                console.log('[BarangayGeoJSON] ========================================');
+                
+                // Navigate to portal based on feature type (no preview popup)
+                if (featureType === "barangay" || featureType === undefined) {
+                  // Clicking on barangay - navigate directly to barangay details page
+                  console.log('[BarangayGeoJSON] → ACTION: Navigating to barangay portal');
+                  const barangayName = encodeURIComponent(props.name);
+                  const url = `/admin/barangays?selected=${barangayName}`;
+                  console.log('[BarangayGeoJSON] → URL:', url);
+                  router.push(url);
+                  window.dispatchEvent(new Event('urlchange'));
+                } else if (featureType === "purok") {
+                  // Purok click behavior - navigate directly to purok management
+                  console.log('[BarangayGeoJSON] → ACTION: Purok clicked');
+                  console.log('[BarangayGeoJSON] → Purok ID:', props.id);
+                  console.log('[BarangayGeoJSON] → Purok name:', props.name);
+                  console.log('[BarangayGeoJSON] → User role:', user?.role);
+                  
+                  if (props.id) {
+                    console.log('[BarangayGeoJSON] → ✅ Navigating to purok management...');
+                    const url = `/admin/puroks?selected=${props.id}`;
+                    console.log('[BarangayGeoJSON] → URL:', url);
+                    router.push(url);
+                    window.dispatchEvent(new Event('urlchange'));
+                  } else {
+                    console.error('[BarangayGeoJSON] → ❌ No purok ID found');
+                  }
+                } else {
+                  // Fallback: just show the popup for unknown types
+                  console.log('[BarangayGeoJSON] → Unknown feature type - showing popup only');
+                  if (target && typeof (target as any).openPopup === 'function') {
+                    (target as any).openPopup();
+                  }
+                }
+              } catch (err) {
+                console.error('[BarangayGeoJSON] ❌ CLICK ERROR:', err);
+              }
+            },
+          });
+        } catch (err) {
+          console.error('[BarangayGeoJSON] Error in onEachFeature:', err);
+        }
+      }}
+    />
+  );
+}
+
 // ─── Main unified component ───────────────────────────────────────────────────
 export function MapView({
   showHotspots = true,
@@ -503,30 +976,106 @@ export function MapView({
   showHomeVisits = false,
   showFacilities = true,
   showPredictions = false,
+  focusBarangay = null,
 }: {
   showHotspots?: boolean;
   showProgramCoverage?: boolean;
   showHomeVisits?: boolean;
   showFacilities?: boolean;
   showPredictions?: boolean;
+  focusBarangay?: string | null;
 }) {
   const { user } = useAuthStore();
   const [tileKey, setTileKey] = useState<TileLayerKey>("Default");
   const tile = TILE_LAYERS[tileKey];
   const [heatmapOn, setHeatmapOn] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  
+  // Hover overlay state
+  const [hoveredFeature, setHoveredFeature] = useState<any | null>(null);
+  const [mousePosition, setMousePosition] = useState<{ x: number; y: number } | null>(null);
+  
+  // Purok modal state
+  const [showPurokModal, setShowPurokModal] = useState(false);
+  const [selectedPurokId, setSelectedPurokId] = useState<string | null>(null);
+  
+  // Debug logging for modal state changes
+  useEffect(() => {
+    console.log('[MapView] Purok modal state changed:', { showPurokModal, selectedPurokId });
+    if (showPurokModal && selectedPurokId) {
+      console.log('[MapView] ✅ Modal should be visible now');
+    } else {
+      console.log('[MapView] ❌ Modal is hidden');
+    }
+  }, [showPurokModal, selectedPurokId]);
+  
+  // Fetch purok details when modal is open
+  const purokDetailsQ = useQuery({
+    queryKey: ["purok-details", selectedPurokId],
+    queryFn: () => api.get(`/api/puroks/${selectedPurokId}`).then(r => r.data),
+    enabled: !!selectedPurokId && showPurokModal,
+  });
+  
+  const purokChildrenQ = useQuery({
+    queryKey: ["purok-children", selectedPurokId],
+    queryFn: () => api.get(`/api/children`, { params: { purok_id: selectedPurokId } }).then(r => r.data),
+    enabled: !!selectedPurokId && showPurokModal,
+  });
+  
+  const handleHover = (feature: any | null, position: { x: number; y: number } | null) => {
+    setHoveredFeature(feature);
+    setMousePosition(position);
+  };
 
   // ── Child markers (coloured pins) ─────────────────────────────────────────
   const { data: markersData } = useQuery({
-    queryKey: ["map-markers", user?.id],
-    queryFn: () => api.get("/api/maps/child-markers").then((r) => r.data),
+    queryKey: ["map-markers", user?.id, user?.barangay_id],
+    queryFn: async () => {
+      // For admin users, filter markers by their assigned barangay
+      if (user?.role === "admin" && user?.barangay_id) {
+        return api.get("/api/maps/child-markers", {
+          params: { barangay_id: user.barangay_id }
+        }).then((r) => r.data);
+      }
+      // For superadmin, get all markers
+      return api.get("/api/maps/child-markers").then((r) => r.data);
+    },
     enabled: !!user?.id,
   });
 
   // ── Barangay/purok choropleth (used for heatmap data + boundaries) ─────────
   const { data: barangaysData } = useQuery({
-    queryKey: ["barangay-choropleth", user?.id],
-    queryFn: () => api.get("/api/maps/barangay-choropleth").then((r) => r.data),
+    queryKey: ["barangay-choropleth", user?.id, user?.barangay_id, focusBarangay],
+    queryFn: async () => {
+      // FOR ADMIN: Always filter by their assigned barangay
+      // Use focusBarangay if provided, otherwise use user's barangay_id
+      if (user?.role === "admin") {
+        // Get the barangay name to filter by
+        let barangayName = null;
+        
+        if (focusBarangay) {
+          barangayName = decodeURIComponent(focusBarangay);
+        } else if (user?.barangay_id) {
+          // Fetch the barangay name from barangay_id
+          try {
+            const barangayRes = await api.get(`/api/barangays/${user.barangay_id}`);
+            barangayName = barangayRes.data?.name;
+          } catch (err) {
+            console.error('[MapView] Failed to fetch admin barangay name:', err);
+          }
+        }
+        
+        if (barangayName) {
+          const params = `?barangay_name=${encodeURIComponent(barangayName)}`;
+          console.log('[MapView] Admin - Fetching data for barangay:', barangayName);
+          return api.get(`/api/maps/barangay-choropleth${params}`).then((r) => r.data);
+        }
+      }
+      
+      // FOR SUPERADMIN: Always fetch ALL barangays (no filter)
+      console.log('[MapView] Superadmin - Fetching all barangays');
+      return api.get(`/api/maps/barangay-choropleth`).then((r) => r.data);
+    },
     enabled: !!user?.id,
   });
 
@@ -537,13 +1086,49 @@ export function MapView({
 
   const filteredBarangaysData = useMemo(() => {
     if (!barangaysData) return null;
+    
+    // Filter out excluded barangay names
+    let features = (barangaysData.features ?? []).filter(
+      (f: any) => !EXCLUDED_BARANGAY_NAMES.has(f.properties?.name)
+    );
+    
+    // Data is already filtered by backend for admins, no need for additional filtering
+    // Just return the features as-is
+    
     return {
       ...barangaysData,
-      features: (barangaysData.features ?? []).filter(
-        (f: any) => !EXCLUDED_BARANGAY_NAMES.has(f.properties?.name)
-      ),
+      features,
     };
   }, [barangaysData]);
+
+  // Split data into barangays and puroks for separate rendering
+  const barangayFeatures = useMemo(() => {
+    if (!filteredBarangaysData) return null;
+    const features = filteredBarangaysData.features?.filter(
+      (f: any) => f.properties?.featureType !== "purok"
+    ) || [];
+    console.log('[MapView] Barangay features:', features.length);
+    return {
+      ...filteredBarangaysData,
+      features
+    };
+  }, [filteredBarangaysData]);
+
+  const purokFeatures = useMemo(() => {
+    if (!filteredBarangaysData) return null;
+    const features = filteredBarangaysData.features?.filter(
+      (f: any) => f.properties?.featureType === "purok"
+    ) || [];
+    console.log('[MapView] Purok features:', features.length);
+    // Debug: log first purok to see structure
+    if (features.length > 0) {
+      console.log('[MapView] Sample purok feature:', features[0]);
+    }
+    return {
+      ...filteredBarangaysData,
+      features
+    };
+  }, [filteredBarangaysData]);
 
   // List used for IDW heatmap
   const barangayList: BarangaySeverity[] = useMemo(() =>
@@ -551,18 +1136,34 @@ export function MapView({
     [filteredBarangaysData]
   );
 
-  // Dynamic centre — admin zooms to their barangay/purok
+  // Dynamic centre — admin zooms to their barangay, superadmin sees whole city
   const mapCenter = useMemo((): [number, number] => {
-    if (user?.role === "admin" && filteredBarangaysData?.features?.length > 0) {
-      const first = filteredBarangaysData.features[0];
-      const lat = first.properties?.lat;
-      const lng = first.properties?.lng;
-      if (lat && lng) return [lat, lng];
+    if (!filteredBarangaysData?.features?.length) {
+      return CABADBARAN_CENTER as [number, number];
     }
+    
+    // For admin users, center on their assigned barangay (first barangay feature)
+    if (user?.role === "admin") {
+      // Find the barangay feature (not purok)
+      const barangayFeature = filteredBarangaysData.features.find(
+        (f: any) => f.properties?.featureType === "barangay" || !f.properties?.featureType
+      );
+      
+      if (barangayFeature) {
+        const lat = barangayFeature.properties?.lat;
+        const lng = barangayFeature.properties?.lng;
+        if (lat && lng) {
+          console.log('[MapView] Admin - Centering on barangay:', barangayFeature.properties?.name, `[${lat}, ${lng}]`);
+          return [lat, lng];
+        }
+      }
+    }
+    
+    // For superadmin or fallback, use default center
     return CABADBARAN_CENTER as [number, number];
   }, [user, filteredBarangaysData]);
 
-  const mapZoom = user?.role === "admin" ? 15 : 13;
+  const mapZoom = focusBarangay || user?.role === "admin" ? 15 : 13;
 
   // Ensure container has proper dimensions before map initializes
   useEffect(() => {
@@ -574,100 +1175,110 @@ export function MapView({
     }
   }, []);
 
+  // Ensure container has proper dimensions before map initializes
+  useEffect(() => {
+    if (containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) {
+        console.warn('[MapView] Container not yet properly sized, map may fail to initialize');
+      }
+    }
+  }, []);
+
+  const [mapError, setMapError] = useState<string | null>(null);
+
+  // Add error handler for map initialization
+  useEffect(() => {
+    const handleError = (event: ErrorEvent) => {
+      if (event.message?.includes('_leaflet_pos') || event.message?.includes('leaflet')) {
+        console.error('[MapView] Leaflet error caught:', event.message);
+        // Don't block the UI, just log it
+      }
+    };
+
+    window.addEventListener('error', handleError);
+    return () => window.removeEventListener('error', handleError);
+  }, []);
+
   return (
-    <div ref={containerRef} className="relative w-full" style={{ height: "100%" }}>
+    <div ref={containerRef} className="relative w-full h-full flex flex-col bg-gray-100">
 
       {/* Layer switcher */}
       <LayerSwitcher active={tileKey} onChange={setTileKey} />
 
-      <MapContainer {...CABADBARAN_MAP_OPTIONS} className={CABADBARAN_MAP_CLASS} style={{ height: "100%", width: "100%" }}>
-        <MapCenterController center={mapCenter} zoom={mapZoom} />
-        <TileLayer key={tileKey} attribution={tile.attribution} url={tile.url} />
+      <div className="flex-1 w-full min-h-0 relative overflow-hidden">
+        <MapContainer 
+          key={`map-${user?.id}-${user?.barangay_id}`}
+          {...CABADBARAN_MAP_OPTIONS} 
+          className={CABADBARAN_MAP_CLASS} 
+          style={{ height: "100%", width: "100%", display: "block" }}
+        >
+          <MapCenterController center={mapCenter} zoom={mapZoom} />
+          <TileLayer key={tileKey} attribution={tile.attribution} url={tile.url} />
 
-        {/* Barangay boundaries with hover popups */}
-        {filteredBarangaysData && (
-          <GeoJSON
-            key={JSON.stringify(filteredBarangaysData)}
-            data={filteredBarangaysData}
-            style={() => barangayStyle}
-            onEachFeature={(feature, layer) => {
-              if (feature.properties?.name) {
-                layer.bindTooltip(feature.properties.name, {
-                  permanent: true,
-                  direction: "center",
-                  className: "barangay-label",
-                });
-              }
-              const props = feature.properties as BarangaySeverity;
-              // Use buildPopupHtml to ensure consistent enhanced information
-              const popupContent = buildPopupHtml(props);
-              layer.bindPopup(popupContent, { 
-                closeButton: true, 
-                autoClose: true,
-                maxWidth: 700,
-                minWidth: 550,
-                className: "map-popup",
-              });
-              layer.on({
-                mouseover: (e) => {
-                  const target = e.target as L.Polygon;
-                  target.openPopup();
-                  target.setStyle({ color: "#10b981", fillColor: "#10b981", fillOpacity: 0.2, weight: 2 });
-                },
-                mouseout: (e) => {
-                  const target = e.target as L.Polygon;
-                  target.closePopup();
-                  target.setStyle(barangayStyle);
-                },
-                click: (e) => {
-                  const target = e.target as L.Polygon;
-                  target.openPopup();
-                },
-              });
-            }}
+          {/* Barangay boundaries (render first, below puroks) */}
+          {barangayFeatures && barangayFeatures.features?.length > 0 && (
+            <BarangayGeoJSON 
+              data={barangayFeatures} 
+              user={user}
+              onHover={handleHover}
+              setSelectedPurokId={setSelectedPurokId}
+              setShowPurokModal={setShowPurokModal}
+            />
+          )}
+          
+          {/* Purok boundaries (render second, on top of barangays) */}
+          {purokFeatures && purokFeatures.features?.length > 0 && (
+            <BarangayGeoJSON 
+              data={purokFeatures} 
+              user={user}
+              onHover={handleHover}
+              setSelectedPurokId={setSelectedPurokId}
+              setShowPurokModal={setShowPurokModal}
+            />
+          )}
+
+          {/* Dark mask outside city */}
+          <Polygon
+            positions={CABADBARAN_MASK}
+            pathOptions={{ color: "transparent", fillColor: "#1e293b", fillOpacity: 0.65 }}
+            interactive={false}
           />
-        )}
 
-        {/* Dark mask outside city */}
-        <Polygon
-          positions={CABADBARAN_MASK}
-          pathOptions={{ color: "transparent", fillColor: "#1e293b", fillOpacity: 0.65 }}
-          interactive={false}
-        />
-
-        {/* Child pin markers — visible based on layer settings */}
-        {(showProgramCoverage || showHomeVisits || !heatmapOn) && markers.map((m: any) => (
-          <Marker key={m.id} position={[m.lat, m.lng]} icon={pinIcon(m.overall_status)}>
-            <Popup>
-              <strong className="block text-slate-800">{m.name}</strong>
-              <span className="text-xs font-semibold" style={{ color: getStatusColor(m.overall_status) }}>
-                {(m.overall_status ?? "normal").replace(/_/g, " ")}
-              </span>
-              <br />
-              <span className="text-xs text-slate-500">
-                Age: {m.age_months} months
+          {/* Child pin markers — visible based on layer settings */}
+          {(showProgramCoverage || showHomeVisits || !heatmapOn) && markers.map((m: any) => (
+            <Marker key={m.id} position={[m.lat, m.lng]} icon={pinIcon(m.overall_status)}>
+              <Popup>
+                <strong className="block text-slate-800">{m.name}</strong>
+                <span className="text-xs font-semibold" style={{ color: getStatusColor(m.overall_status).hex }}>
+                  {(m.overall_status ?? "normal").replace(/_/g, " ")}
+                </span>
                 <br />
-                Last measured: {m.last_measured}
-              </span>
-            </Popup>
-          </Marker>
-        ))}
+                <span className="text-xs text-slate-500">
+                  Age: {m.age_months} months
+                  <br />
+                  Last measured: {m.last_measured}
+                </span>
+              </Popup>
+            </Marker>
+          ))}
 
-        {/* IDW heatmap overlay — only when toggle is ON AND showHotspots is true */}
-        {heatmapOn && showHotspots && barangayList.length > 0 && (
-          <IDWCanvasLayer data={barangayList} showLabels={showHotspots} />
-        )}
+          {/* IDW heatmap overlay — only when toggle is ON AND showHotspots is true */}
+          {heatmapOn && showHotspots && barangayList.length > 0 && (
+            <IDWCanvasLayer data={barangayList} showLabels={showHotspots} />
+          )}
 
-        {/* Layer icons overlay on barangays */}
-        <LayerIconsOverlay
-          showHotspots={showHotspots}
-          showProgramCoverage={showProgramCoverage}
-          showHomeVisits={showHomeVisits}
-          showFacilities={showFacilities}
-          showPredictions={showPredictions}
-          barangayList={barangayList}
-        />
-      </MapContainer>
+          {/* Layer icons overlay on barangays */}
+          <LayerIconsOverlay
+            showHotspots={showHotspots}
+            showProgramCoverage={showProgramCoverage}
+            showHomeVisits={showHomeVisits}
+            showFacilities={showFacilities}
+            showPredictions={showPredictions}
+            barangayList={barangayList}
+          />
+        </MapContainer>
+      </div>
 
       {/* ── Heatmap toggle button (inside map panel) ── */}
       <button
@@ -702,6 +1313,194 @@ export function MapView({
               {tier.label} <span className="text-slate-400">({tier.range})</span>
             </span>
           ))}
+        </div>
+      )}
+      
+      {/* ── Custom Hover Overlay (Canvas-based, no flicker) ── */}
+      <HoverOverlay hoveredFeature={hoveredFeature} mousePosition={mousePosition} />
+      
+      {/* ── Purok Details Modal ── */}
+      {showPurokModal && selectedPurokId && (
+        <div 
+          className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+          onClick={() => {
+            console.log('[MapView] Modal overlay clicked - closing modal');
+            setShowPurokModal(false);
+            setSelectedPurokId(null);
+          }}
+          style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}
+        >
+          <div 
+            className="relative w-full max-w-3xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden max-h-[90vh] flex flex-col"
+            onClick={e => {
+              console.log('[MapView] Modal content clicked - preventing close');
+              e.stopPropagation();
+            }}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-gradient-to-r from-teal-50 to-emerald-50 shrink-0">
+              <div className="flex items-center gap-3">
+                <MapPin className="h-6 w-6 text-teal-600" />
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">
+                    {purokDetailsQ.data?.name || "Loading..."}
+                  </h2>
+                  {purokDetailsQ.data && (
+                    <p className="text-xs text-slate-600 font-medium">
+                      Code: {purokDetailsQ.data.code || "N/A"} • Barangay: {purokDetailsQ.data.barangay_name || "N/A"}
+                    </p>
+                  )}
+                </div>
+              </div>
+              <button 
+                onClick={() => {
+                  setShowPurokModal(false);
+                  setSelectedPurokId(null);
+                }}
+                className="p-2 rounded-full hover:bg-slate-200 text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            
+            {/* Modal Content - Scrollable */}
+            <div className="flex-1 overflow-y-auto">
+              {purokDetailsQ.isLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600 mx-auto mb-4"></div>
+                    <p className="text-slate-500">Loading purok details...</p>
+                  </div>
+                </div>
+              ) : purokDetailsQ.data ? (
+                <div className="p-6 space-y-6">
+                  {/* Overview Statistics */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="bg-gradient-to-br from-blue-50 to-blue-100 border-l-4 border-blue-600 rounded-lg p-4">
+                      <p className="text-xs text-blue-600 font-bold uppercase">Children</p>
+                      <p className="text-3xl font-black text-blue-800 mt-2">
+                        {purokChildrenQ.data?.length || 0}
+                      </p>
+                    </div>
+                    
+                    <div className="bg-gradient-to-br from-red-50 to-red-100 border-l-4 border-red-600 rounded-lg p-4">
+                      <p className="text-xs text-red-600 font-bold uppercase">Active Cases</p>
+                      <p className="text-3xl font-black text-red-800 mt-2">
+                        {purokChildrenQ.data?.filter((c: any) => 
+                          c.overall_status === 'severe_acute_malnutrition' || 
+                          c.overall_status === 'moderate_acute_malnutrition'
+                        ).length || 0}
+                      </p>
+                    </div>
+                    
+                    <div className="bg-gradient-to-br from-purple-50 to-purple-100 border-l-4 border-purple-600 rounded-lg p-4">
+                      <p className="text-xs text-purple-600 font-bold uppercase">Households</p>
+                      <p className="text-3xl font-black text-purple-800 mt-2">
+                        {purokDetailsQ.data.household_count || 0}
+                      </p>
+                    </div>
+                    
+                    <div className="bg-gradient-to-br from-green-50 to-green-100 border-l-4 border-green-600 rounded-lg p-4">
+                      <p className="text-xs text-green-600 font-bold uppercase">Risk Level</p>
+                      <p className="text-xl font-black text-green-800 mt-2 capitalize">
+                        {purokDetailsQ.data.risk_level || "Low"}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {/* Purok Information */}
+                  <div className="bg-slate-50 rounded-xl p-5 border border-slate-200">
+                    <h3 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
+                      <Home className="h-4 w-4" />
+                      Purok Information
+                    </h3>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <p className="text-slate-500 font-semibold">Code:</p>
+                        <p className="text-slate-800 font-mono">{purokDetailsQ.data.code || "N/A"}</p>
+                      </div>
+                      <div>
+                        <p className="text-slate-500 font-semibold">Leader:</p>
+                        <p className="text-slate-800">{purokDetailsQ.data.leader || "N/A"}</p>
+                      </div>
+                      <div>
+                        <p className="text-slate-500 font-semibold">Population:</p>
+                        <p className="text-slate-800">{purokDetailsQ.data.population || "N/A"}</p>
+                      </div>
+                      <div>
+                        <p className="text-slate-500 font-semibold">Contact:</p>
+                        <p className="text-slate-800">{purokDetailsQ.data.contact_number || "N/A"}</p>
+                      </div>
+                      <div>
+                        <p className="text-slate-500 font-semibold">BNS:</p>
+                        <p className="text-slate-800">{purokDetailsQ.data.assigned_bns || "N/A"}</p>
+                      </div>
+                      <div>
+                        <p className="text-slate-500 font-semibold">Health Worker:</p>
+                        <p className="text-slate-800">{purokDetailsQ.data.assigned_health_worker || "N/A"}</p>
+                      </div>
+                    </div>
+                    {purokDetailsQ.data.notes && (
+                      <div className="mt-4 pt-4 border-t border-slate-200">
+                        <p className="text-slate-500 font-semibold text-xs">Notes:</p>
+                        <p className="text-slate-700 text-sm mt-1">{purokDetailsQ.data.notes}</p>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Recent Children */}
+                  {purokChildrenQ.data && purokChildrenQ.data.length > 0 && (
+                    <div className="bg-white rounded-xl border border-slate-200">
+                      <h3 className="text-sm font-bold text-slate-800 px-5 py-4 border-b border-slate-200 flex items-center gap-2">
+                        <Users className="h-4 w-4" />
+                        Recent Children ({purokChildrenQ.data.length})
+                      </h3>
+                      <div className="divide-y divide-slate-100 max-h-64 overflow-y-auto">
+                        {purokChildrenQ.data.slice(0, 10).map((child: any) => (
+                          <div key={child.id} className="px-5 py-3 hover:bg-slate-50 transition-colors">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="font-semibold text-slate-800 text-sm">{child.name}</p>
+                                <p className="text-xs text-slate-500">
+                                  Age: {child.age_months} months • Gender: {child.gender}
+                                </p>
+                              </div>
+                              <span 
+                                className="text-xs font-bold px-2 py-1 rounded"
+                                style={{ 
+                                  backgroundColor: getStatusColor(child.overall_status).hex + '20',
+                                  color: getStatusColor(child.overall_status).hex
+                                }}
+                              >
+                                {(child.overall_status || 'normal').replace(/_/g, ' ').toUpperCase()}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="flex items-center justify-center py-12">
+                  <p className="text-slate-500">Failed to load purok details</p>
+                </div>
+              )}
+            </div>
+            
+            {/* Modal Footer */}
+            <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 shrink-0">
+              <button
+                onClick={() => {
+                  setShowPurokModal(false);
+                  setSelectedPurokId(null);
+                }}
+                className="w-full bg-teal-600 hover:bg-teal-700 text-white font-semibold py-2.5 rounded-lg transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

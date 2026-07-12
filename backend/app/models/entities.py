@@ -138,6 +138,18 @@ class ActivityLogType(str, enum.Enum):
     other = "other"
 
 
+class CaseStatus(str, enum.Enum):
+    active = "active"
+    resolved = "resolved"
+    transferred = "transferred"
+    lost_to_followup = "lost_to_followup"
+
+
+class CaseType(str, enum.Enum):
+    sam = "sam"  # Severe Acute Malnutrition
+    mam = "mam"  # Moderate Acute Malnutrition
+
+
 def uuid_pk() -> Mapped[uuid.UUID]:
     return mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
@@ -512,3 +524,84 @@ class LocationAccuracy(Base, TimestampMixin):
     # Relationships
     barangay = relationship("Barangay")
     created_by = relationship("User")
+
+
+
+class MalnutritionCase(Base, TimestampMixin):
+    """
+    Central case management entity for tracking malnutrition cases.
+    Groups child measurements, interventions, and referrals.
+    """
+    __tablename__ = "malnutrition_cases"
+    id = uuid_pk()
+    child_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("children.id"), index=True)
+    barangay_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("barangays.id"))
+    case_status: Mapped[CaseStatus] = mapped_column(Enum(CaseStatus), default=CaseStatus.active, index=True)
+    case_type: Mapped[CaseType] = mapped_column(Enum(CaseType), index=True)
+    
+    # Timeline
+    enrollment_date: Mapped[date] = mapped_column(Date, server_default=func.now())
+    first_measurement_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("measurements.id"), nullable=True)
+    current_status_measurement_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("measurements.id"), nullable=True)
+    resolution_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    
+    # Assignment & Responsibility
+    assigned_bns_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    responsible_facility: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    
+    # Case Notes & Summary
+    initial_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    resolution_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    
+    # Relationships
+    child = relationship("Child")
+    barangay = relationship("Barangay")
+    assigned_bns = relationship("User", foreign_keys=[assigned_bns_id])
+    first_measurement = relationship("Measurement", foreign_keys=[first_measurement_id])
+    current_measurement = relationship("Measurement", foreign_keys=[current_status_measurement_id])
+    status_history = relationship("CaseStatusHistory", back_populates="case", cascade="all, delete-orphan")
+    action_plans = relationship("CaseActionPlan", back_populates="case", cascade="all, delete-orphan")
+
+
+class CaseStatusHistory(Base):
+    """
+    Audit trail of case status transitions.
+    Tracks when and why a case status changed.
+    """
+    __tablename__ = "case_status_history"
+    id = uuid_pk()
+    case_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("malnutrition_cases.id"), index=True)
+    previous_status: Mapped[CaseStatus] = mapped_column(Enum(CaseStatus))
+    new_status: Mapped[CaseStatus] = mapped_column(Enum(CaseStatus))
+    changed_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    
+    # Relationships
+    case = relationship("MalnutritionCase", back_populates="status_history")
+    changed_by_user = relationship("User", foreign_keys=[changed_by])
+
+
+class CaseActionPlan(Base, TimestampMixin):
+    """
+    Action plan for a malnutrition case.
+    Links planned interventions (referrals, programs, home visits) to the case.
+    """
+    __tablename__ = "case_action_plans"
+    id = uuid_pk()
+    case_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("malnutrition_cases.id"), index=True)
+    title: Mapped[str] = mapped_column(String(220))
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    planned_interventions: Mapped[dict] = mapped_column(JSON, default=dict)  # e.g., {"referral": True, "program": True, "home_visits": 4}
+    start_date: Mapped[date] = mapped_column(Date)
+    expected_end_date: Mapped[date] = mapped_column(Date)
+    expected_outcomes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    reviewed_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    
+    # Relationships
+    case = relationship("MalnutritionCase", back_populates="action_plans")
+    creator = relationship("User", foreign_keys=[created_by])
+    reviewer = relationship("User", foreign_keys=[reviewed_by])

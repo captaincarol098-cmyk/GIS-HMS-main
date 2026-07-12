@@ -1,8 +1,11 @@
 "use client";
+
+export const dynamic = 'force-dynamic';
+
 import "@/styles/admin.css";
 
-import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useMemo, useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   MapPin, Users, Plus, Search, Eye, Edit3, Archive, RotateCcw,
@@ -18,21 +21,38 @@ type TabId = "list" | "add" | "edit" | "detail" | "children" | "programs" | "hom
 
 export default function PurokManagementPage() {
   const router = useRouter();
+  const [searchParams, setSearchParams] = useState<any>(null);
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
+  
+  // Defer searchParams to client-side only
+  useEffect(() => {
+    try {
+      const sp = new URL(window.location.href).searchParams;
+      setSearchParams(sp);
+    } catch (e) {
+      // Fallback - still in SSR
+    }
+  }, []);
 
   const isSuper = user?.role === "super_admin";
 
   const [search, setSearch] = useState("");
   const [riskFilter, setRiskFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [yearFilter, setYearFilter] = useState(new Date().getFullYear()); // Add year filter for both admin and superadmin
+  const [yearFilter, setYearFilter] = useState(new Date().getFullYear());
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [tab, setTab] = useState<TabId>("list");
   const [showArchiveModal, setShowArchiveModal] = useState<string | null>(null);
   const [barangayFilter, setBarangayFilter] = useState("");
   const [showPurokModal, setShowPurokModal] = useState(false);
   const [purokModalTab, setPurokModalTab] = useState<"overview" | "children" | "programs" | "home-visits" | "assessments" | "activity">("overview");
+
+  // Defer useSearchParams to useEffect to avoid hydration mismatch
+  useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    // Handle any search params if needed
+  }, []);
 
   // Calculate barangayId early, before it's used in queries
   const barangayId = isSuper ? barangayFilter || undefined : user?.barangay_id;
@@ -69,6 +89,21 @@ export default function PurokManagementPage() {
     queryKey: ["barangays"],
     queryFn: () => api.get("/api/barangays").then(r => r.data),
   });
+
+  // Auto-open purok details modal if selected parameter is in URL
+  useEffect(() => {
+    if (!searchParams) return; // Guard against null searchParams
+    const selectedPurokId = searchParams.get("selected");
+    if (selectedPurokId && puroksQ.data) {
+      const matchingPurok = puroksQ.data.find((p: any) => p.id === selectedPurokId);
+      if (matchingPurok) {
+        setSelectedId(selectedPurokId);
+        setShowPurokModal(true);
+        setPurokModalTab("overview");
+      }
+    }
+  }, [searchParams, puroksQ.data]);
+
   const barangayMap = useMemo(() => {
     const m: Record<string, string> = {};
     (barangaysQ.data || []).forEach((b: any) => { m[b.id] = b.name; });
@@ -363,12 +398,12 @@ export default function PurokManagementPage() {
 
             {/* Sub-Tabs */}
             <div className="flex gap-1 px-6 pt-3 border-b border-slate-200 bg-white sticky top-[73px] z-10">
-              {(["overview", "children", "programs", "home-visits", "assessments", "activity"] as const).map((st) => (
+              {(["overview", "children", "programs", "home-visits", "assessments", "analytics", "activity"] as const).map((st) => (
                 <button key={st} onClick={() => setPurokModalTab(st)}
                   className={`px-4 py-2 text-xs font-bold capitalize rounded-t-lg border-b-2 transition-colors admin-tab-horizontal ${
                     purokModalTab === st ? "active text-blue-700 bg-blue-50/50" : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50"
                   }`}>
-                  {st === "overview" && "📊 Overview"}{st === "children" && "👶 Children"}{st === "programs" && "📋 Programs"}{st === "home-visits" && "🏠 Home Visits"}{st === "assessments" && "📏 Assessments"}{st === "activity" && "📝 Activity"}
+                  {st === "overview" && "📊 Overview"}{st === "children" && "👶 Children"}{st === "programs" && "📋 Programs"}{st === "home-visits" && "🏠 Home Visits"}{st === "assessments" && "📏 Assessments"}{st === "analytics" && "📈 Analytics"}{st === "activity" && "📝 Activity"}
                 </button>
               ))}
             </div>
@@ -578,6 +613,124 @@ export default function PurokManagementPage() {
                         ))}
                       </tbody>
                     </table>
+                  </div>
+                </div>
+              )}
+
+              {/* ─── ANALYTICS ─── */}
+              {purokModalTab === "analytics" && selectedPurokDetailQ.data && (
+                <div className="space-y-6">
+                  <h3 className="text-lg font-bold text-slate-800">📈 Purok Analytics</h3>
+                  
+                  {/* Nutritional Status Distribution */}
+                  <div className="admin-glass-panel p-4">
+                    <h4 className="text-sm font-bold text-slate-700 mb-3">Nutritional Status Distribution</h4>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
+                        <div className="text-2xl font-black text-green-700">{selectedPurokDetailQ.data.nutrition_status?.normal || 0}</div>
+                        <div className="text-xs text-green-600 font-semibold mt-1">Normal</div>
+                      </div>
+                      <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-center">
+                        <div className="text-2xl font-black text-amber-700">{selectedPurokDetailQ.data.nutrition_status?.at_risk || 0}</div>
+                        <div className="text-xs text-amber-600 font-semibold mt-1">At Risk</div>
+                      </div>
+                      <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-center">
+                        <div className="text-2xl font-black text-red-700">{selectedPurokDetailQ.data.nutrition_status?.critical || 0}</div>
+                        <div className="text-xs text-red-600 font-semibold mt-1">Critical</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Demographics */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="admin-glass-panel p-4">
+                      <h4 className="text-sm font-bold text-slate-700 mb-3">Age Distribution</h4>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between items-center">
+                          <span className="text-slate-600">0-6 months</span>
+                          <span className="font-bold text-slate-800">{selectedPurokDetailQ.data.age_distribution?.['0-6'] || 0}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-slate-600">6-24 months</span>
+                          <span className="font-bold text-slate-800">{selectedPurokDetailQ.data.age_distribution?.['6-24'] || 0}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-slate-600">24-59 months</span>
+                          <span className="font-bold text-slate-800">{selectedPurokDetailQ.data.age_distribution?.['24-59'] || 0}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="admin-glass-panel p-4">
+                      <h4 className="text-sm font-bold text-slate-700 mb-3">Gender Distribution</h4>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between items-center">
+                          <span className="text-slate-600">👦 Male</span>
+                          <span className="font-bold text-blue-700">{selectedPurokDetailQ.data.gender_distribution?.male || 0}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-slate-600">👧 Female</span>
+                          <span className="font-bold text-pink-700">{selectedPurokDetailQ.data.gender_distribution?.female || 0}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Program Coverage */}
+                  <div className="admin-glass-panel p-4">
+                    <h4 className="text-sm font-bold text-slate-700 mb-3">Program Coverage</h4>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                        <div className="text-xs text-blue-600 font-semibold mb-1">Active Programs</div>
+                        <div className="text-2xl font-black text-blue-700">{selectedPurokDetailQ.data.program_stats?.active || 0}</div>
+                      </div>
+                      <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+                        <div className="text-xs text-emerald-600 font-semibold mb-1">Completed Programs</div>
+                        <div className="text-2xl font-black text-emerald-700">{selectedPurokDetailQ.data.program_stats?.completed || 0}</div>
+                      </div>
+                      <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+                        <div className="text-xs text-purple-600 font-semibold mb-1">Home Visits (This Month)</div>
+                        <div className="text-2xl font-black text-purple-700">{selectedPurokDetailQ.data.home_visit_stats?.this_month || 0}</div>
+                      </div>
+                      <div className="bg-teal-50 border border-teal-200 rounded-lg p-3">
+                        <div className="text-xs text-teal-600 font-semibold mb-1">Assessment Coverage</div>
+                        <div className="text-2xl font-black text-teal-700">{selectedPurokDetailQ.data.assessment_stats?.coverage_percent || 0}%</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Performance Indicators */}
+                  <div className="admin-glass-panel p-4">
+                    <h4 className="text-sm font-bold text-slate-700 mb-3">Performance Indicators</h4>
+                    <div className="space-y-3">
+                      <div>
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="text-slate-600">Monitoring Coverage</span>
+                          <span className="font-bold text-slate-800">{selectedPurokDetailQ.data.performance?.monitoring_coverage || 0}%</span>
+                        </div>
+                        <div className="w-full bg-slate-200 rounded-full h-2">
+                          <div className="bg-blue-600 h-2 rounded-full" style={{width: `${selectedPurokDetailQ.data.performance?.monitoring_coverage || 0}%`}}></div>
+                        </div>
+                      </div>
+                      <div>
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="text-slate-600">Program Participation</span>
+                          <span className="font-bold text-slate-800">{selectedPurokDetailQ.data.performance?.program_participation || 0}%</span>
+                        </div>
+                        <div className="w-full bg-slate-200 rounded-full h-2">
+                          <div className="bg-emerald-600 h-2 rounded-full" style={{width: `${selectedPurokDetailQ.data.performance?.program_participation || 0}%`}}></div>
+                        </div>
+                      </div>
+                      <div>
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="text-slate-600">Recovery Rate</span>
+                          <span className="font-bold text-slate-800">{selectedPurokDetailQ.data.performance?.recovery_rate || 0}%</span>
+                        </div>
+                        <div className="w-full bg-slate-200 rounded-full h-2">
+                          <div className="bg-green-600 h-2 rounded-full" style={{width: `${selectedPurokDetailQ.data.performance?.recovery_rate || 0}%`}}></div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}

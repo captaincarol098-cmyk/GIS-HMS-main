@@ -491,8 +491,43 @@ function OptPlusReportSection() {
 
       {/* Empty State */}
       {!optPlusQuery.isLoading && !optPlusQuery.isError && !data && (
-        <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center">
-          <p className="text-slate-600 font-semibold">No data available for the selected period</p>
+        <div className="bg-blue-50 border border-blue-200 rounded-2xl p-6 text-center">
+          <p className="text-blue-900 font-semibold mb-3">No data available for the selected period</p>
+          <p className="text-blue-700 text-sm mb-4">
+            The OPT Plus report shows coverage for children measured during the selected month. 
+            {selectedMonth === new Date().getMonth() + 1 && selectedYear === new Date().getFullYear() 
+              ? " Currently viewing the current month - create or import measurements to see coverage data."
+              : " Try selecting a different month/year, or create measurements for the current period."}
+          </p>
+          <div className="flex flex-wrap gap-2 justify-center">
+            <button
+              onClick={() => {
+                setSelectedYear(new Date().getFullYear());
+                setSelectedMonth(new Date().getMonth() + 1);
+              }}
+              className="text-xs bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-lg transition"
+            >
+              View Current Month
+            </button>
+            <button
+              onClick={() => {
+                setSelectedYear(2026);
+                setSelectedMonth(5);
+              }}
+              className="text-xs bg-slate-600 hover:bg-slate-700 text-white font-semibold px-4 py-2 rounded-lg transition"
+            >
+              View May 2026 (Has Data)
+            </button>
+            <button
+              onClick={() => {
+                setSelectedYear(2025);
+                setSelectedMonth(12);
+              }}
+              className="text-xs bg-slate-600 hover:bg-slate-700 text-white font-semibold px-4 py-2 rounded-lg transition"
+            >
+              View Dec 2025 (Has Data)
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -655,27 +690,15 @@ export default function OperationTimbangPage() {
   const queryClient = useQueryClient();
   const router = useRouter();
 
-  // SuperAdmin gets dedicated OPT Plus view
-  if (user?.role === "super_admin") {
-    return <SuperAdminOPTPlusPage />;
-  }
-
-  if (user?.role !== "admin") {
-    return (
-      <div className="admin-container">
-        <div className="text-center py-12">
-          <p className="text-red-600 font-semibold">Access Denied</p>
-          <p className="text-slate-600 mt-2">This feature is only available for Admin users</p>
-        </div>
-      </div>
-    );
-  }
-
+  // Declare all hooks first (before any early returns)
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<TabId>("list");
   const [editId, setEditId] = useState<string | null>(null);
   const [viewRecord, setViewRecord] = useState<OperationTimbangRecord | null>(null);
   const [showImport, setShowImport] = useState(false);
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+  const [selectedPurok, setSelectedPurok] = useState<string>("");
+  const [showFilters, setShowFilters] = useState(false);
 
   const [form, setForm] = useState({
     child_name: "",
@@ -691,14 +714,64 @@ export default function OperationTimbangPage() {
   });
 
   const recordsQ = useQuery({
-    queryKey: ["operation-timbang"],
+    queryKey: ["operation-timbang", selectedYear, selectedPurok],
     queryFn: () => api.get("/api/operation-timbang").then(r => r.data?.data || r.data || []),
     retry: false,
     staleTime: 0, // Always consider data stale
-    refetchOnMount: true, // Refetch when component mounts
-    refetchOnWindowFocus: true, // Refetch when window regains focus
-    refetchOnReconnect: true, // Refetch when connection restored
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   });
+
+  // Get unique puroks for filter dropdown
+  const puroks = useMemo((): string[] => {
+    const records = recordsQ.data || [];
+    const uniquePuroks = new Set(records.map((r: any) => r.location).filter(Boolean));
+    return Array.from(uniquePuroks).sort() as string[];
+  }, [recordsQ.data]);
+
+  // Filter records by year, purok, and search
+  const filteredRecords = useMemo(() => {
+    let records = recordsQ.data || [];
+    if (!Array.isArray(records)) records = [];
+    
+    // Filter by year
+    if (selectedYear) {
+      records = records.filter((r: any) => {
+        const year = new Date(r.actual_date_visit).getFullYear();
+        return year === selectedYear;
+      });
+    }
+    
+    // Filter by purok
+    if (selectedPurok) {
+      records = records.filter((r: any) => r.location === selectedPurok);
+    }
+    
+    // Filter by search query
+    const q = search.trim().toLowerCase();
+    if (q) {
+      records = records.filter((r: any) =>
+        r.child_name?.toLowerCase().includes(q) ||
+        r.mother_name?.toLowerCase().includes(q) ||
+        r.location?.toLowerCase().includes(q)
+      );
+    }
+    
+    // Show only the latest record per unique child
+    const childMap = new Map<string, any>();
+    records.forEach((record: any) => {
+      const child_id = record.child_id;
+      const existing = childMap.get(child_id);
+      
+      // Keep the most recent record for each child
+      if (!existing || new Date(record.actual_date_visit) > new Date(existing.actual_date_visit)) {
+        childMap.set(child_id, record);
+      }
+    });
+    
+    return Array.from(childMap.values());
+  }, [recordsQ.data, selectedYear, selectedPurok, search]);
 
   const createMutation = useMutation({
     mutationFn: (data: any) => api.post("/api/operation-timbang", data),
@@ -748,32 +821,22 @@ export default function OperationTimbangPage() {
     return (today.getFullYear() - birth.getFullYear()) * 12 + (today.getMonth() - birth.getMonth());
   };
 
-  const filteredRecords = useMemo(() => {
-    let data = recordsQ.data || [];
-    if (!Array.isArray(data)) data = [];
-    const q = search.trim().toLowerCase();
-    if (q) {
-      data = data.filter((r: any) =>
-        r.child_name?.toLowerCase().includes(q) ||
-        r.mother_name?.toLowerCase().includes(q) ||
-        r.location?.toLowerCase().includes(q)
-      );
-    }
-    
-    // Show only the latest record per unique child
-    const childMap = new Map<string, any>();
-    data.forEach((record: any) => {
-      const child_id = record.child_id;
-      const existing = childMap.get(child_id);
-      
-      // Keep the most recent record for each child
-      if (!existing || new Date(record.actual_date_visit) > new Date(existing.actual_date_visit)) {
-        childMap.set(child_id, record);
-      }
-    });
-    
-    return Array.from(childMap.values());
-  }, [recordsQ.data, search]);
+  // NOW do the role checks after all hooks are declared
+  // SuperAdmin gets dedicated OPT Plus view
+  if (user?.role === "super_admin") {
+    return <SuperAdminOPTPlusPage />;
+  }
+
+  if (user?.role !== "admin") {
+    return (
+      <div className="admin-container">
+        <div className="text-center py-12">
+          <p className="text-red-600 font-semibold">Access Denied</p>
+          <p className="text-slate-600 mt-2">This feature is only available for Admin users</p>
+        </div>
+      </div>
+    );
+  }
 
   // Stats removed - Summary cards section deleted
 
@@ -991,6 +1054,56 @@ export default function OperationTimbangPage() {
 
       {/* Records Table */}
       <Panel title="📋 Assessment Records">
+        {/* Year and Purok Filters */}
+        <div className="mb-4 p-4 bg-gradient-to-r from-teal-50 to-green-50 border border-teal-200 rounded-lg">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold text-slate-800 text-sm">🔍 Filters</h3>
+            <button
+              onClick={() => {
+                setSelectedYear(new Date().getFullYear());
+                setSelectedPurok("");
+                setSearch("");
+              }}
+              className="text-xs px-3 py-1 bg-teal-600 hover:bg-teal-700 text-white rounded transition"
+            >
+              Reset All
+            </button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-2">Year</label>
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(Number(e.target.value))}
+                className="w-full border border-teal-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+              >
+                {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - i).map((year) => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-2">Purok</label>
+              <select
+                value={selectedPurok}
+                onChange={(e) => setSelectedPurok(e.target.value)}
+                className="w-full border border-teal-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+              >
+                <option value="">All Puroks</option>
+                {puroks.map((purok) => (
+                  <option key={purok} value={purok}>{purok}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-2">Results</label>
+              <div className="h-10 flex items-center px-3 bg-white border border-teal-300 rounded text-sm font-semibold text-teal-700">
+                {filteredRecords.length} record{filteredRecords.length !== 1 ? 's' : ''}
+              </div>
+            </div>
+          </div>
+        </div>
+        
         <div className="relative mb-4">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
           <input type="text" placeholder="Search by name, mother, or location..." value={search} onChange={(e) => setSearch(e.target.value)} className="admin-interactive-input w-full pl-9 pr-3 py-2 rounded-lg text-sm" />

@@ -32,26 +32,80 @@ button, input, select, textarea { font: inherit; }
 .status-overweight, .severity-medium { background: #fef9c3; color: #854d0e; }
 
 /* Barangay name labels on map */
-.barangay-label {
-  background: transparent !important;
+.leaflet-tooltip.barangay-label,
+.barangay-label.leaflet-tooltip,
+.barangay-label,
+.leaflet-tooltip.barangay-label *,
+.barangay-label.leaflet-tooltip *,
+.barangay-label * {
+  background: rgba(255, 255, 255, 0) !important;
+  background-color: rgba(255, 255, 255, 0) !important;
   border: none !important;
+  border-color: transparent !important;
   box-shadow: none !important;
-  color: #2E7D32;
-  font-size: 10px;
-  font-weight: 700;
-  text-align: center;
-  text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 3px #fff;
-  pointer-events: none;
-  white-space: nowrap;
+  color: #10b981 !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  text-align: center !important;
+  text-shadow: 
+    -1px -1px 0 #000,
+    1px -1px 0 #000,
+    -1px 1px 0 #000,
+    1px 1px 0 #000,
+    0 0 4px rgba(0, 0, 0, 0.8),
+    0 0 8px rgba(0, 0, 0, 0.5) !important;
+  pointer-events: none !important;
+  white-space: nowrap !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  letter-spacing: 0.3px !important;
 }
-.barangay-label::before { display: none !important; }
+.leaflet-tooltip.barangay-label::before,
+.barangay-label.leaflet-tooltip::before,
+.barangay-label::before { 
+  display: none !important;
+  content: none !important;
+  background: none !important;
+}
+
+/* Purok name labels on map - smaller and different color for distinction */
+.leaflet-tooltip.purok-label,
+.purok-label.leaflet-tooltip,
+.purok-label {
+  background: rgba(255, 255, 255, 0) !important;
+  background-color: rgba(255, 255, 255, 0) !important;
+  border: none !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  color: #ea580c !important;
+  font-size: 8px !important;
+  font-weight: 600 !important;
+  text-align: center !important;
+  text-shadow: 0 0 2px #fff, 0 0 2px #fff !important;
+  pointer-events: none !important;
+  white-space: nowrap !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+.leaflet-tooltip.purok-label::before,
+.purok-label.leaflet-tooltip::before,
+.purok-label::before { 
+  display: none !important;
+  content: none !important;
+  background: none !important;
+}
 
 /* Map popup styles */
+.map-popup {
+  /* Position popup to the right of cursor */
+  position: absolute !important;
+}
+
 .map-popup .leaflet-popup-content-wrapper {
   background: #ffffff !important;
   border: 1px solid #e2e8f0 !important;
   border-radius: 8px !important;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2) !important;
   padding: 0 !important;
 }
 
@@ -63,11 +117,21 @@ button, input, select, textarea { font: inherit; }
   min-width: 550px !important;
   font-family: system-ui, -apple-system, sans-serif !important;
   line-height: 1.3 !important;
+  display: block !important;
 }
 
 .map-popup .leaflet-popup-tip {
   background: #ffffff !important;
   border: 1px solid #e2e8f0 !important;
+  border-left: 1px solid #e2e8f0 !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+}
+
+/* Position tip to the left when popup is on the right */
+.map-popup.leaflet-popup-right .leaflet-popup-tip {
+  border-right: 1px solid #e2e8f0 !important;
+  border-top: 1px solid #e2e8f0 !important;
+  margin-left: -8px !important;
 }
 
 .map-popup .leaflet-popup-close-button {
@@ -75,8 +139,9 @@ button, input, select, textarea { font: inherit; }
   opacity: 0.6 !important;
   font-size: 18px !important;
   padding: 4px 8px !important;
-  top: 4px !important;
-  right: 4px !important;
+  top: 6px !important;
+  right: 6px !important;
+  line-height: 1 !important;
 }
 
 .map-popup .leaflet-popup-close-button:hover {
@@ -92,9 +157,29 @@ button, input, select, textarea { font: inherit; }
 .map-popup .leaflet-popup-content {
   max-height: 600px !important;
   overflow-y: auto !important;
+  overflow-x: hidden !important;
 }
 
 /* Fix for content display */
 .map-popup div {
   box-sizing: border-box !important;
+}
+
+/* Responsive: Stack on smaller screens */
+@media (max-width: 1024px) {
+  .map-popup .leaflet-popup-content {
+    min-width: 400px !important;
+    max-width: 500px !important;
+  }
+}
+
+/* Force remove black background from ALL Leaflet tooltips with our custom classes */
+.leaflet-tooltip-pane .leaflet-tooltip.barangay-label,
+.leaflet-tooltip-pane .leaflet-tooltip.purok-label,
+.leaflet-pane .leaflet-tooltip.barangay-label,
+.leaflet-pane .leaflet-tooltip.purok-label {
+  background: none !important;
+  background-color: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
 }

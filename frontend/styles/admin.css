@@ -364,3 +364,78 @@
 @keyframes admin-slide-in-up { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
 
 .admin-animate-in { animation:admin-slide-in-up 0.35s cubic-bezier(0.4,0,0.2,1) forwards; }
+
+
+/* ─── Leaflet Popup Positioning ────────────────────────────────────────────── */
+/* Position popup to the right by default */
+.leaflet-popup-right {
+  margin-left: 20px !important;
+}
+
+.leaflet-popup-right .leaflet-popup-tip-container {
+  left: -10px;
+}
+
+.leaflet-popup-right .leaflet-popup-tip {
+  transform: rotate(90deg);
+  margin: -10px auto 0 0;
+}
+
+/* Position popup to the left when it would go offscreen */
+.leaflet-popup-left {
+  margin-left: -20px !important;
+}
+
+.leaflet-popup-left .leaflet-popup-tip-container {
+  left: auto;
+  right: -10px;
+}
+
+.leaflet-popup-left .leaflet-popup-tip {
+  transform: rotate(-90deg);
+  margin: -10px 0 0 auto;
+}
+
+/* Ensure popup content is visible and has high z-index */
+.leaflet-popup-content-wrapper {
+  border-radius: 8px;
+  box-shadow: 0 3px 14px rgba(0,0,0,0.4);
+}
+
+.leaflet-popup-content {
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* Ensure popup stays visible and above other elements */
+.map-popup-visible {
+  z-index: 9999 !important;
+}
+
+.leaflet-popup {
+  z-index: 9999 !important;
+  pointer-events: none !important; /* Prevent popup from blocking mouse events */
+}
+
+/* Allow interaction with popup content only */
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  pointer-events: auto !important;
+}
+
+/* Make sure popup container has high z-index */
+.leaflet-map-pane .leaflet-popup-pane {
+  z-index: 9999 !important;
+}
+
+
+/* ─── Barangay Hover Tooltip (Hidden - Using HoverOverlay Component Instead) ─── */
+.barangay-hover-tooltip {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+}
+
+.barangay-hover-tooltip::before {
+  display: none !important;
+}

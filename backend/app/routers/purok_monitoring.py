@@ -44,7 +44,12 @@ async def purok_monitoring(
     all_meas = (await db.scalars(
         select(Measurement)
         .join(Child, Child.id == Measurement.child_id)
-        .where(Child.barangay_id == user.barangay_id if user.role.value == "admin" else True, *year_filter)
+        .join(Barangay, Barangay.id == Child.barangay_id)
+        .where(
+            Barangay.name.notin_(EXCLUDED_BARANGAYS),
+            Child.barangay_id == user.barangay_id if user.role.value == "admin" else True, 
+            *year_filter
+        )
         .options(selectinload(Measurement.child).selectinload(Child.purok))
     )).all()
     

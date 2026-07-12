@@ -132,14 +132,14 @@ export function SuperAdminAIInsightsWidget({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-lg font-bold text-slate-900">🤖 City-Wide AI Insights & Strategic Forecast</h2>
+                <h2 className="text-lg font-bold text-slate-900">🤖 City-Wide Decision Support & Strategic Forecast</h2>
                 <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-800 text-[10px] font-black px-2.5 py-1 rounded-full uppercase animate-pulse">
                   <span className="h-1.5 w-1.5 bg-emerald-500 rounded-full animate-bounce"></span>
-                  REALTIME AUTO-DETECT
+                  RULE-BASED ANALYSIS
                 </span>
               </div>
               <p className="text-sm text-slate-600 mt-1">
-                Evidence-based city-level recommendations from your entire city's child health data (Updates every 5 seconds)
+                Evidence-based city-level recommendations using OPT Plus rule-based classification and prevalence analysis
               </p>
             </div>
           </div>
@@ -375,7 +375,7 @@ export function SuperAdminAIInsightsWidget({
             <span className="inline-flex h-2 w-2 rounded-full bg-emerald-500 absolute animate-pulse"></span>
             <span className="inline-flex h-2 w-2 rounded-full bg-emerald-500 opacity-75"></span>
           </div>
-          <span>REALTIME AUTO-DETECT ACTIVE • Updates every 5 seconds • RAG-powered AI Analysis</span>
+          <span>RULE-BASED CLASSIFICATION ACTIVE • OPT Plus Standards • Rule-Based Decision Support</span>
         </div>
       </div>
     </div>

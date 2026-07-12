@@ -18,6 +18,7 @@ import {
   PieChart, Pie, Cell, BarChart, Bar, Legend, AreaChart, Area
 } from "recharts";
 import { SuperAdminAIInsightsWidget } from "@/components/dashboard/SuperAdminAIInsightsWidget";
+import { NutritionalStatusAnalytics } from "./NutritionalStatusAnalytics";
 
 interface SuperAdminAnalyticsProps {
   selectedYear: number;
@@ -724,6 +725,15 @@ export function SuperAdminAnalytics({
             <p className="text-slate-600 font-semibold">No OPT Plus data available for the selected period</p>
           </div>
         )}
+      </div>
+
+      {/* Nutritional Status Analytics Section */}
+      <div className="admin-glass-panel p-6 border-l-4 border-l-blue-500">
+        <div className="flex items-center gap-3 mb-6">
+          <Zap className="h-6 w-6 text-blue-600" />
+          <h2 className="text-lg font-extrabold text-slate-900">📊 Nutritional Status Analytics (Operation Timbang)</h2>
+        </div>
+        <NutritionalStatusAnalytics selectedYear={selectedYear} />
       </div>
     </div>
   );

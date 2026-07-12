@@ -132,3 +132,89 @@ class ReportRevisionRequest(BaseModel):
 class ReportEditRequest(BaseModel):
     content: str  # Updated HTML content
     notes: str | None = None  # Edit notes
+
+
+# ============ CASE MANAGEMENT SCHEMAS ============
+
+class CaseStatusHistoryRead(ORMModel):
+    id: UUID
+    case_id: UUID
+    previous_status: str
+    new_status: str
+    changed_by: UUID | None
+    reason: str | None
+    notes: str | None
+    created_at: datetime
+
+
+class CaseActionPlanCreate(BaseModel):
+    title: str
+    description: str | None = None
+    planned_interventions: dict[str, Any] | None = None  # e.g., {"referral": True, "program": True, "home_visits": 4}
+    start_date: date
+    expected_end_date: date
+    expected_outcomes: str | None = None
+
+
+class CaseActionPlanRead(ORMModel):
+    id: UUID
+    case_id: UUID
+    title: str
+    description: str | None
+    planned_interventions: dict[str, Any] | None
+    start_date: date
+    expected_end_date: date
+    expected_outcomes: str | None
+    created_by: UUID | None
+    reviewed_by: UUID | None
+    reviewed_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class MalnutritionCaseCreate(BaseModel):
+    child_id: UUID
+    case_type: str  # "sam" or "mam"
+    initial_notes: str | None = None
+    assigned_bns_id: UUID | None = None
+    responsible_facility: str | None = None
+
+
+class MalnutritionCaseUpdate(BaseModel):
+    case_status: str | None = None
+    assigned_bns_id: UUID | None = None
+    responsible_facility: str | None = None
+    initial_notes: str | None = None
+    resolution_notes: str | None = None
+
+
+class MalnutritionCaseRead(ORMModel):
+    id: UUID
+    child_id: UUID
+    barangay_id: UUID
+    case_status: str
+    case_type: str
+    enrollment_date: date
+    first_measurement_id: UUID | None
+    current_status_measurement_id: UUID | None
+    resolution_date: date | None
+    assigned_bns_id: UUID | None
+    responsible_facility: str | None
+    initial_notes: str | None
+    resolution_notes: str | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class MalnutritionCaseDetail(MalnutritionCaseRead):
+    """Extended case detail with child info and related data"""
+    child: ChildRead | None = None
+    status_history: list[CaseStatusHistoryRead] = []
+    action_plans: list[CaseActionPlanRead] = []
+
+
+class MalnutritionCaseStatusChangeRequest(BaseModel):
+    new_status: str  # "active", "resolved", "transferred", "lost_to_followup"
+    reason: str | None = None
+    notes: str | None = None
+    resolution_notes: str | None = None  # Only for resolved status

@@ -14,6 +14,7 @@ from uuid import UUID
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from ..models import Child, Measurement, Barangay, Purok
+import json
 
 
 AlertLevel = Literal["warning", "critical", "emergency", "normal"]
@@ -21,9 +22,10 @@ AlertLevel = Literal["warning", "critical", "emergency", "normal"]
 
 # ============================================================================
 # ALERT THRESHOLD CONSTANTS (NNC OPT Plus Guidelines [50])
+# Default values - can be overridden by database settings
 # ============================================================================
 
-ALERT_THRESHOLDS = {
+DEFAULT_ALERT_THRESHOLDS = {
     "warning": {
         "any_prevalence": 10.0,  # Any indicator ≥ 10%
         "color": "yellow",
@@ -47,6 +49,9 @@ ALERT_THRESHOLDS = {
         "action": "Notify CHO, immediate intervention"
     }
 }
+
+# Will be populated from database at runtime
+ALERT_THRESHOLDS = DEFAULT_ALERT_THRESHOLDS.copy()
 
 
 # ============================================================================

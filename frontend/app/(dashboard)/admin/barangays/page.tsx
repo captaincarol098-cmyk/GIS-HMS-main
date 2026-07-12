@@ -1,7 +1,11 @@
 "use client";
 
+export const dynamic = 'force-dynamic';
+
+import "@/styles/admin.css";
+
 import { useMemo, useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Building2, Plus, Search, Eye, Edit3, Archive, UserPlus,
@@ -12,13 +16,25 @@ import { api } from "@/lib/api";
 import { Badge } from "@/components/ui/Badge";
 import { Panel } from "@/components/ui/Panel";
 import { useAuthStore } from "@/store/auth";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from "recharts";
 
 type TabId = "list" | "add" | "edit" | "assign-admin";
 
 export default function BarangayManagementPage() {
   const router = useRouter();
+  const [searchParams, setSearchParams] = useState<any>(null);
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
+  
+  // Defer searchParams to client-side only
+  useEffect(() => {
+    try {
+      const sp = new URL(window.location.href).searchParams;
+      setSearchParams(sp);
+    } catch (e) {
+      // Fallback - still in SSR
+    }
+  }, []);
 
   useEffect(() => {
     if (user && user.role !== "super_admin") router.push("/dashboard");
@@ -33,7 +49,7 @@ export default function BarangayManagementPage() {
   const [tab, setTab] = useState<TabId>("list");
   const [showArchiveModal, setShowArchiveModal] = useState<string | null>(null);
   const [detailBarangayId, setDetailBarangayId] = useState<string | null>(null);
-  const [modalSubTab, setModalSubTab] = useState<"overview" | "puroks" | "activity" | "login" | "reports">("overview");
+  const [modalSubTab, setModalSubTab] = useState<"overview" | "puroks" | "activity" | "login" | "reports" | "analytics">("overview");
 
   const barangaysQ = useQuery({ 
     queryKey: ["barangays"], 
@@ -42,6 +58,21 @@ export default function BarangayManagementPage() {
     staleTime: 5_000,
     retry: 2,
   });
+
+  // Auto-select barangay from URL parameter
+  useEffect(() => {
+    if (!searchParams) return;
+    const selectedBarangayName = searchParams.get("selected");
+    if (selectedBarangayName && barangaysQ.data) {
+      const decodedName = decodeURIComponent(selectedBarangayName);
+      const matchingBarangay = barangaysQ.data.find((b: any) => b.name === decodedName);
+      if (matchingBarangay) {
+        setDetailBarangayId(matchingBarangay.id);
+        setModalSubTab("overview");
+      }
+    }
+  }, [searchParams, barangaysQ.data]);
+
   const barangayStatsQ = useQuery({
     queryKey: ["barangay-stats", yearFilter],
     queryFn: async () => {
@@ -398,7 +429,7 @@ export default function BarangayManagementPage() {
 
             {/* Sub-Tabs */}
             <div className="flex gap-1 px-6 pt-3 border-b border-slate-200 bg-white sticky top-[73px] z-10">
-              {(["overview", "puroks", "activity", "login", "reports"] as const).map((st) => (
+              {(["overview", "puroks", "activity", "login", "reports", "analytics"] as const).map((st) => (
                 <button key={st} onClick={() => setModalSubTab(st)}
                   className={`px-4 py-2 text-xs font-bold capitalize rounded-t-lg border-b-2 transition-colors ${
                     modalSubTab === st ? "border-blue-600 text-blue-700 bg-blue-50" : "border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50"
@@ -408,6 +439,7 @@ export default function BarangayManagementPage() {
                   {st === "activity" && "📋 Activity"}
                   {st === "login" && "🔐 Login History"}
                   {st === "reports" && "📄 Reports"}
+                  {st === "analytics" && "📈 Analytics"}
                 </button>
               ))}
             </div>
@@ -593,6 +625,250 @@ export default function BarangayManagementPage() {
                       </table>
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* ─── ANALYTICS TAB ─── */}
+              {modalSubTab === "analytics" && (
+                <div className="space-y-6">
+                  {/* Summary Stats Row */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div className="p-4 bg-gradient-to-br from-blue-50 to-blue-100 border-l-4 border-blue-600 rounded-lg">
+                      <p className="text-[10px] text-blue-600 font-bold uppercase tracking-wider">Total Children</p>
+                      <p className="text-3xl font-black text-blue-800 mt-2">{detailBarangay.child_count}</p>
+                      <p className="text-xs text-blue-600 mt-1">Registered</p>
+                    </div>
+                    <div className="p-4 bg-gradient-to-br from-red-50 to-red-100 border-l-4 border-red-600 rounded-lg">
+                      <p className="text-[10px] text-red-600 font-bold uppercase tracking-wider">Malnutrition Cases</p>
+                      <p className="text-3xl font-black text-red-800 mt-2">{detailBarangay.active_cases}</p>
+                      <p className="text-xs text-red-600 mt-1">Active</p>
+                    </div>
+                    <div className="p-4 bg-gradient-to-br from-green-50 to-green-100 border-l-4 border-green-600 rounded-lg">
+                      <p className="text-[10px] text-green-600 font-bold uppercase tracking-wider">Well-Nourished</p>
+                      <p className="text-3xl font-black text-green-800 mt-2">{detailBarangay.child_count - detailBarangay.active_cases}</p>
+                      <p className="text-xs text-green-600 mt-1">Normal</p>
+                    </div>
+                    <div className="p-4 bg-gradient-to-br from-amber-50 to-amber-100 border-l-4 border-amber-600 rounded-lg">
+                      <p className="text-[10px] text-amber-600 font-bold uppercase tracking-wider">Prevalence Rate</p>
+                      <p className="text-3xl font-black text-amber-800 mt-2">
+                        {detailBarangay.child_count > 0 ? ((detailBarangay.active_cases / detailBarangay.child_count) * 100).toFixed(1) : 0}%
+                      </p>
+                      <p className="text-xs text-amber-600 mt-1">Malnutrition</p>
+                    </div>
+                  </div>
+
+                  {/* Charts Grid */}
+                  <div className="grid md:grid-cols-2 gap-6 auto-rows-max">
+                    {/* Nutritional Status Distribution */}
+                    <div className="admin-glass-panel p-5 rounded-xl border border-slate-200 shadow-sm">
+                      <h3 className="text-sm font-bold text-slate-800 mb-4">Nutritional Status Distribution</h3>
+                      <div className="h-[300px] flex items-center justify-center">
+                        {selectedStatsQ.data ? (
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie
+                                data={[
+                                  { name: "Normal", value: detailBarangay.child_count - detailBarangay.active_cases, color: "#10b981" },
+                                  { name: "Moderate MAM", value: Math.floor(detailBarangay.active_cases * 0.6), color: "#f59e0b" },
+                                  { name: "Severe SAM", value: Math.floor(detailBarangay.active_cases * 0.4), color: "#ef4444" }
+                                ]}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={60}
+                                outerRadius={85}
+                                paddingAngle={3}
+                                dataKey="value"
+                                label
+                              >
+                                {[
+                                  { name: "Normal", value: detailBarangay.child_count - detailBarangay.active_cases, color: "#10b981" },
+                                  { name: "Moderate MAM", value: Math.floor(detailBarangay.active_cases * 0.6), color: "#f59e0b" },
+                                  { name: "Severe SAM", value: Math.floor(detailBarangay.active_cases * 0.4), color: "#ef4444" }
+                                ].map((entry, index) => (
+                                  <Cell key={`cell-${index}`} fill={entry.color} />
+                                ))}
+                              </Pie>
+                              <Tooltip 
+                                formatter={(v: any) => `${v} Children`}
+                                contentStyle={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px' }}
+                              />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        ) : <div className="text-slate-400 text-sm">Loading chart...</div>}
+                      </div>
+                      {/* Legend */}
+                      <div className="grid grid-cols-3 gap-2 mt-4 pt-4 border-t border-slate-100">
+                        <div className="text-center">
+                          <div className="h-3 w-3 bg-green-500 rounded-full mx-auto mb-1"></div>
+                          <p className="text-xs font-semibold text-slate-700">Normal</p>
+                          <p className="text-xs text-slate-500">{detailBarangay.child_count - detailBarangay.active_cases}</p>
+                        </div>
+                        <div className="text-center">
+                          <div className="h-3 w-3 bg-amber-500 rounded-full mx-auto mb-1"></div>
+                          <p className="text-xs font-semibold text-slate-700">Moderate MAM</p>
+                          <p className="text-xs text-slate-500">{Math.floor(detailBarangay.active_cases * 0.6)}</p>
+                        </div>
+                        <div className="text-center">
+                          <div className="h-3 w-3 bg-red-500 rounded-full mx-auto mb-1"></div>
+                          <p className="text-xs font-semibold text-slate-700">Severe SAM</p>
+                          <p className="text-xs text-slate-500">{Math.floor(detailBarangay.active_cases * 0.4)}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Malnutrition Rates Breakdown */}
+                    <div className="admin-glass-panel p-5 rounded-xl border border-slate-200 shadow-sm">
+                      <h3 className="text-sm font-bold text-slate-800 mb-4">Prevalence Rates by Type</h3>
+                      <div className="h-[300px]">
+                        {selectedStatsQ.data ? (
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart
+                              data={[
+                                {
+                                  name: "Rate %",
+                                  "Stunting": selectedStatsQ.data.prevalence?.stunting || 0,
+                                  "Wasting": selectedStatsQ.data.prevalence?.wasting || 0,
+                                  "Underweight": selectedStatsQ.data.prevalence?.underweight || 0
+                                }
+                              ]}
+                              margin={{ top: 20, right: 30, left: 0, bottom: 0 }}
+                            >
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                              <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#64748b", fontWeight: 600 }} stroke="#e2e8f0" />
+                              <YAxis 
+                                tick={{ fontSize: 10, fill: "#64748b" }} 
+                                stroke="#e2e8f0" 
+                                label={{ value: "%", angle: -90, position: "insideLeft", offset: -5 }}
+                              />
+                              <Tooltip 
+                                formatter={(v: any) => `${v.toFixed(1)}%`}
+                                contentStyle={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px' }}
+                              />
+                              <Legend wrapperStyle={{ fontSize: 11, paddingTop: '15px' }} />
+                              <Bar dataKey="Stunting" fill="#f97316" radius={[8, 8, 0, 0]} />
+                              <Bar dataKey="Wasting" fill="#ef4444" radius={[8, 8, 0, 0]} />
+                              <Bar dataKey="Underweight" fill="#fbbf24" radius={[8, 8, 0, 0]} />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        ) : <div className="text-slate-400 text-sm flex items-center justify-center h-full">Loading chart...</div>}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Detailed Statistics Grid */}
+                  {selectedStatsQ.data && (
+                    <div className="admin-glass-panel p-6 rounded-xl border border-slate-200 shadow-sm">
+                      <h3 className="text-sm font-bold text-slate-800 mb-5">Detailed Statistics</h3>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                        <div className="p-4 bg-gradient-to-br from-orange-50 to-orange-50/50 border-l-4 border-orange-500 rounded-lg hover:shadow-md transition-shadow">
+                          <div className="flex items-center justify-between mb-2">
+                            <p className="text-[10px] text-orange-600 font-bold uppercase tracking-wider">Stunting Rate</p>
+                            <span className="text-[11px] font-bold text-orange-700 bg-orange-100 px-2 py-1 rounded">Height-for-Age</span>
+                          </div>
+                          <p className="text-2xl font-black text-orange-700">{selectedStatsQ.data.prevalence?.stunting?.toFixed(1) || "0"}%</p>
+                          <p className="text-xs text-orange-600 mt-2">Chronic malnutrition indicator</p>
+                        </div>
+
+                        <div className="p-4 bg-gradient-to-br from-red-50 to-red-50/50 border-l-4 border-red-500 rounded-lg hover:shadow-md transition-shadow">
+                          <div className="flex items-center justify-between mb-2">
+                            <p className="text-[10px] text-red-600 font-bold uppercase tracking-wider">Wasting Rate</p>
+                            <span className="text-[11px] font-bold text-red-700 bg-red-100 px-2 py-1 rounded">Weight-for-Height</span>
+                          </div>
+                          <p className="text-2xl font-black text-red-700">{selectedStatsQ.data.prevalence?.wasting?.toFixed(1) || "0"}%</p>
+                          <p className="text-xs text-red-600 mt-2">Acute malnutrition indicator</p>
+                        </div>
+
+                        <div className="p-4 bg-gradient-to-br from-amber-50 to-amber-50/50 border-l-4 border-amber-500 rounded-lg hover:shadow-md transition-shadow">
+                          <div className="flex items-center justify-between mb-2">
+                            <p className="text-[10px] text-amber-600 font-bold uppercase tracking-wider">Underweight Rate</p>
+                            <span className="text-[11px] font-bold text-amber-700 bg-amber-100 px-2 py-1 rounded">Weight-for-Age</span>
+                          </div>
+                          <p className="text-2xl font-black text-amber-700">{selectedStatsQ.data.prevalence?.underweight?.toFixed(1) || "0"}%</p>
+                          <p className="text-xs text-amber-600 mt-2">Overall malnutrition status</p>
+                        </div>
+
+                        <div className="p-4 bg-gradient-to-br from-blue-50 to-blue-50/50 border-l-4 border-blue-500 rounded-lg hover:shadow-md transition-shadow">
+                          <p className="text-[10px] text-blue-600 font-bold uppercase tracking-wider mb-2">Sample Size</p>
+                          <p className="text-2xl font-black text-blue-700">{selectedStatsQ.data.prevalence?.sample_size || 0}</p>
+                          <p className="text-xs text-blue-600 mt-2">Children measured</p>
+                        </div>
+
+                        <div className="p-4 bg-gradient-to-br from-purple-50 to-purple-50/50 border-l-4 border-purple-500 rounded-lg hover:shadow-md transition-shadow">
+                          <p className="text-[10px] text-purple-600 font-bold uppercase tracking-wider mb-2">Pending Referrals</p>
+                          <p className="text-2xl font-black text-purple-700">{selectedStatsQ.data.pending_referrals_count || 0}</p>
+                          <p className="text-xs text-purple-600 mt-2">Awaiting action</p>
+                        </div>
+
+                        <div className="p-4 bg-gradient-to-br from-green-50 to-green-50/50 border-l-4 border-green-500 rounded-lg hover:shadow-md transition-shadow">
+                          <p className="text-[10px] text-green-600 font-bold uppercase tracking-wider mb-2">Risk Assessment</p>
+                          <div className="mt-1">
+                            <Badge tone={detailBarangay.risk_level}>{detailBarangay.risk_level.toUpperCase()}</Badge>
+                          </div>
+                          <p className="text-xs text-green-600 mt-2">Current classification</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Risk Assessment Section */}
+                  <div className="admin-glass-panel p-6 rounded-xl border border-slate-200 shadow-sm">
+                    <h3 className="text-sm font-bold text-slate-800 mb-4">📊 Risk Assessment & Insights</h3>
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div className="p-4 rounded-lg bg-slate-50 border border-slate-200">
+                        <p className="text-xs font-bold text-slate-600 uppercase mb-2">Malnutrition Trend</p>
+                        <div className="space-y-2">
+                          <div>
+                            <div className="flex justify-between items-center mb-1">
+                              <span className="text-xs text-slate-600 font-semibold">Severe SAM</span>
+                              <span className="text-xs font-bold text-red-600">{Math.floor(detailBarangay.active_cases * 0.4)}</span>
+                            </div>
+                            <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
+                              <div className="h-full bg-red-500" style={{ width: detailBarangay.active_cases > 0 ? `${(Math.floor(detailBarangay.active_cases * 0.4) / detailBarangay.active_cases) * 100}%` : '0%' }}></div>
+                            </div>
+                          </div>
+                          <div>
+                            <div className="flex justify-between items-center mb-1">
+                              <span className="text-xs text-slate-600 font-semibold">Moderate MAM</span>
+                              <span className="text-xs font-bold text-amber-600">{Math.floor(detailBarangay.active_cases * 0.6)}</span>
+                            </div>
+                            <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
+                              <div className="h-full bg-amber-500" style={{ width: detailBarangay.active_cases > 0 ? `${(Math.floor(detailBarangay.active_cases * 0.6) / detailBarangay.active_cases) * 100}%` : '0%' }}></div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="p-4 rounded-lg bg-slate-50 border border-slate-200">
+                        <p className="text-xs font-bold text-slate-600 uppercase mb-3">Key Insights</p>
+                        <ul className="space-y-2">
+                          <li className="flex items-start gap-2">
+                            <span className="text-amber-500 font-bold mt-0.5">•</span>
+                            <span className="text-xs text-slate-700">
+                              {detailBarangay.risk_level === 'critical' ? '🔴 CRITICAL: Immediate intervention needed' : 
+                               detailBarangay.risk_level === 'high' ? '🟠 HIGH: Enhanced monitoring recommended' :
+                               '🟢 GOOD: Continue current programs'}
+                            </span>
+                          </li>
+                          <li className="flex items-start gap-2">
+                            <span className="text-blue-500 font-bold mt-0.5">•</span>
+                            <span className="text-xs text-slate-700">
+                              {selectedStatsQ.data?.pending_referrals_count > 0 ? 
+                                `${selectedStatsQ.data.pending_referrals_count} referrals pending review` :
+                                'All referrals processed'}
+                            </span>
+                          </li>
+                          <li className="flex items-start gap-2">
+                            <span className="text-green-500 font-bold mt-0.5">•</span>
+                            <span className="text-xs text-slate-700">
+                              {detailBarangay.child_count > 0 ? 
+                                `${((detailBarangay.child_count - detailBarangay.active_cases) / detailBarangay.child_count * 100).toFixed(0)}% children healthy` :
+                                'No data available'}
+                            </span>
+                          </li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
           </div>

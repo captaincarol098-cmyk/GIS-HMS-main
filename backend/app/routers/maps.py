@@ -1,6 +1,6 @@
 from uuid import UUID
 from fastapi import APIRouter, Depends
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from ..database import get_db
 from ..middleware.rbac import get_current_user
@@ -29,9 +29,18 @@ async def heatmap_points(barangay_id: UUID | None = None, indicator: str = "wast
 
 
 def purok_feature(obj, lat: float, lng: float, props: dict):
-    # Make a small square around the Purok center
-    hw = 0.0015
-    hh = 0.0015
+    """Create a feature for a purok, using actual geometry if available"""
+    # Priority 1: Use actual purok geometry if available
+    if obj.geometry and obj.geometry.get("type") == "Polygon":
+        return {
+            "type": "Feature", 
+            "geometry": obj.geometry, 
+            "properties": {"id": str(obj.id), "featureType": "purok", **props}
+        }
+    
+    # Priority 2: Create a small square marker around the centroid for puroks without geometry
+    hw = 0.003  # Small square for visual marker
+    hh = 0.003
     geometry = {
         "type": "Polygon",
         "coordinates": [[[
@@ -46,7 +55,7 @@ def purok_feature(obj, lat: float, lng: float, props: dict):
             lng - hw, lat - hh
         ]]]
     }
-    return {"type": "Feature", "geometry": geometry, "properties": {"id": str(obj.id), **props}}
+    return {"type": "Feature", "geometry": geometry, "properties": {"id": str(obj.id), "featureType": "purok", **props}}
 
 
 @router.get("/barangay-boundary")
@@ -114,12 +123,41 @@ async def get_barangay_boundary(db: AsyncSession = Depends(get_db), user: User =
 
 
 @router.get("/barangay-choropleth")
-async def barangay_choropleth(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+async def barangay_choropleth(barangay_name: str | None = None, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     features = []
     if user.role.value == "super_admin":
         # Exclude barangays not part of Cabadbaran City (e.g. Concepcion)
-        for b in (await db.scalars(select(Barangay).where(Barangay.name.notin_(EXCLUDED_BARANGAYS)).order_by(Barangay.name))).all():
-            measurements = await latest_measurements(db, b.id)
+        query = select(Barangay).where(Barangay.name.notin_(EXCLUDED_BARANGAYS)).order_by(Barangay.name)
+        
+        # If a specific barangay is requested, filter to it
+        if barangay_name:
+            query = query.where(Barangay.name == barangay_name)
+        
+        barangays = (await db.scalars(query)).all()
+        
+        # OPTIMIZATION: Fetch all latest measurements in ONE query (not per-barangay loop)
+        all_measurements = await latest_measurements(db, None)  # No barangay filter = all
+        measurements_by_barangay = {}
+        for m in all_measurements:
+            b_id = m.child.barangay_id
+            if b_id not in measurements_by_barangay:
+                measurements_by_barangay[b_id] = []
+            measurements_by_barangay[b_id].append(m)
+        
+        # OPTIMIZATION: Batch query alert counts (not per-barangay queries)
+        alert_counts_stmt = (
+            select(Child.barangay_id, func.count(Alert.id).label("alert_count"))
+            .select_from(Alert)
+            .join(Child, Child.id == Alert.child_id)
+            .where(Alert.is_resolved.is_(False))
+            .group_by(Child.barangay_id)
+        )
+        alert_counts_rows = await db.execute(alert_counts_stmt)
+        alert_counts_map = {row[0]: row[1] for row in alert_counts_rows}
+        
+        for b in barangays:
+            # Use pre-fetched measurements
+            measurements = measurements_by_barangay.get(b.id, [])
             prevalence = calculate_prevalence(measurements)
             severe_count = sum(1 for m in measurements if m.overall_status.value == "severe_acute_malnutrition")
             moderate_count = sum(1 for m in measurements if m.overall_status.value == "moderate_acute_malnutrition")
@@ -138,7 +176,8 @@ async def barangay_choropleth(db: AsyncSession = Depends(get_db), user: User = D
             else:
                 risk_level = "low"  # Green on map
             
-            alert_count = await db.scalar(select(Alert).join(Child, Child.id == Alert.child_id).where(Child.barangay_id == b.id, Alert.is_resolved.is_(False)).count()) if False else 0
+            # Use pre-fetched alert counts
+            alert_count = alert_counts_map.get(b.id, 0)
             
             # Use centroid coordinates for static markers on maps
             lat, lng = 9.118, 125.565
@@ -160,17 +199,63 @@ async def barangay_choropleth(db: AsyncSession = Depends(get_db), user: User = D
                 "lng": lng,
             }))
     elif user.role.value == "admin":
-        puroks = (await db.scalars(select(Purok).where(Purok.barangay_id == user.barangay_id).order_by(Purok.name))).all()
-        measurements = await latest_measurements(db, user.barangay_id)
-        
-        # Get parent barangay coords for fallback
+        # Get parent barangay for boundary display
         parent_brgy = await db.get(Barangay, user.barangay_id)
         fallback_lat, fallback_lng = 9.118, 125.565
-        if parent_brgy and parent_brgy.geometry and "coordinates" in parent_brgy.geometry:
+        
+        # Add the barangay boundary as a feature so admin sees their barangay polygon
+        if parent_brgy and parent_brgy.geometry:
+            # Get barangay measurements for stats
+            measurements = await latest_measurements(db, user.barangay_id)
+            prevalence = calculate_prevalence(measurements)
+            severe_count = sum(1 for m in measurements if m.overall_status.value == "severe_acute_malnutrition")
+            moderate_count = sum(1 for m in measurements if m.overall_status.value == "moderate_acute_malnutrition")
+            malnutrition_count = severe_count + moderate_count
+            total_children = prevalence["sample_size"]
+            malnutrition_rate = round((malnutrition_count / total_children * 100), 1) if total_children else 0
+            
+            if malnutrition_rate >= 30:
+                risk_level = "critical"
+            elif malnutrition_rate >= 15:
+                risk_level = "high"
+            else:
+                risk_level = "low"
+            
+            # Get barangay center coordinates
             coords = parent_brgy.geometry["coordinates"][0][0][0]
             fallback_lng, fallback_lat = coords[0], coords[1]
             
-        import random
+            # Add barangay boundary feature
+            features.append(feature(parent_brgy, {
+                "name": parent_brgy.name,
+                "risk_level": risk_level,
+                "prevalence_rate": malnutrition_rate,
+                "wasting_rate": prevalence["wasting_rate"],
+                "total_children": total_children,
+                "malnutrition_count": malnutrition_count,
+                "moderate_count": moderate_count,
+                "severe_count": severe_count,
+                "alert_count": 0,
+                "lat": fallback_lat,
+                "lng": fallback_lng,
+            }))
+        
+        # Get puroks
+        puroks = (await db.scalars(select(Purok).where(Purok.barangay_id == user.barangay_id).order_by(Purok.name))).all()
+        measurements = await latest_measurements(db, user.barangay_id)
+            
+        def get_centroid_from_polygon(geometry: dict) -> tuple[float, float] | None:
+            """Extract centroid from polygon geometry"""
+            if not geometry or geometry.get("type") != "Polygon":
+                return None
+            coords = geometry.get("coordinates", [[]])[0]
+            if not coords:
+                return None
+            # Calculate centroid using the average of all points
+            lats = [c[1] for c in coords]
+            lngs = [c[0] for c in coords]
+            return (sum(lats) / len(lats), sum(lngs) / len(lngs))
+        
         for p in puroks:
             subset = [m for m in measurements if m.child.purok_id == p.id]
             prevalence = calculate_prevalence(subset)
@@ -191,17 +276,24 @@ async def barangay_choropleth(db: AsyncSession = Depends(get_db), user: User = D
             else:
                 risk_level = "low"  # Green on map
             
-            # Centroid calculation from kids
+            # Priority 1: Get centroid from child measurements (most accurate)
             lats = [m.child.latitude for m in subset if m.child.latitude]
             lngs = [m.child.longitude for m in subset if m.child.longitude]
             if lats:
                 p_lat = sum(lats) / len(lats)
                 p_lng = sum(lngs) / len(lngs)
+            # Priority 2: Get centroid from purok geometry (fallback)
+            elif p.geometry:
+                centroid = get_centroid_from_polygon(p.geometry)
+                if centroid:
+                    p_lat, p_lng = centroid
+                else:
+                    p_lat = fallback_lat
+                    p_lng = fallback_lng
+            # Priority 3: Use barangay fallback
             else:
-                # Deterministic offset based on Purok ID to avoid overlap
-                rand = random.Random(p.id.int)
-                p_lat = fallback_lat + rand.uniform(-0.0015, 0.0015)
-                p_lng = fallback_lng + rand.uniform(-0.0015, 0.0015)
+                p_lat = fallback_lat
+                p_lng = fallback_lng
                 
             features.append(purok_feature(p, p_lat, p_lng, {
                 "name": p.name,

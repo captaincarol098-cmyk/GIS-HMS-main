@@ -4,8 +4,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import select, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 from ..database import get_db
-from ..models import Barangay, Purok, Child, User, ActivityLog, Report, NutritionProgram, Measurement
+from ..models import Barangay, Purok, Child, User, ActivityLog, Report, NutritionProgram, Measurement, HomeVisit
 from ..models.entities import ActivityLogType
 from ..services.analytics import latest_measurements, EXCLUDED_BARANGAYS, summary_for_barangay
 from ..utils.who_zscore import calculate_prevalence, classify_risk_level
@@ -16,7 +17,7 @@ router = APIRouter(tags=["barangays"])
 
 def feature(obj, props: dict):
     geometry = obj.geometry
-    return {"type": "Feature", "geometry": geometry, "properties": {"id": str(obj.id), **props}}
+    return {"type": "Feature", "geometry": geometry, "properties": {"id": str(obj.id), "featureType": "barangay", **props}}
 
 
 def _brgy_out(b: Barangay) -> dict:
@@ -90,17 +91,25 @@ async def barangay_stats(
     if year:
         start_date = date(year, 1, 1)
         end_date = date(year, 12, 31)
+        # Get ALL measurements for the year (for OPT+ count - all records)
         stmt = (
             select(Measurement)
             .join(Child, Child.id == Measurement.child_id)
             .where(
                 Child.barangay_id == barangay_id,
-                Measurement.measurement_date.between(start_date, end_date)
+                Measurement.measurement_date.between(start_date, end_date),
+                Measurement.age_in_months >= 0,
+                Measurement.age_in_months <= 59
             )
         )
-        measurements = (await db.scalars(stmt)).all()
+        all_measurements = (await db.scalars(stmt)).all()
+        
+        # Get LATEST measurements for status/prevalence analysis (filtered by year and age)
+        latest_meas = await latest_measurements(db, barangay_id, year)
+        measurements = latest_meas
     else:
         measurements = await latest_measurements(db, barangay_id)
+        all_measurements = measurements
     
     prevalence = calculate_prevalence(measurements) if measurements else {}
     risk = classify_risk_level(prevalence) if prevalence else "low"
@@ -112,7 +121,7 @@ async def barangay_stats(
         "barangay_id": str(barangay_id),
         "barangay_name": b.name,
         "year": year or date.today().year,
-        "total_children": len(measurements),
+        "total_children": len(all_measurements),
         "severe_cases": severe_count,
         "moderate_cases": moderate_count,
         "active_cases": severe_count + moderate_count,
@@ -276,41 +285,180 @@ def _purok_out(p: Purok) -> dict:
 
 @router.get("/api/puroks")
 async def list_puroks(barangay_id: UUID | None = None, archived: bool = False, db: AsyncSession = Depends(get_db)):
-    stmt = select(Purok).order_by(Purok.name)
+    stmt = select(Purok).options(selectinload(Purok.barangay)).order_by(Purok.name)
     if not archived:
         stmt = stmt.where(Purok.is_archived == False)
     if barangay_id:
         stmt = stmt.where(Purok.barangay_id == barangay_id)
-    rows = (await db.scalars(stmt)).all()
-    return [_purok_out(p) for p in rows]
+    result = await db.execute(stmt)
+    rows = result.scalars().all()
+    
+    # Add barangay names to output
+    output = []
+    for p in rows:
+        purok_dict = _purok_out(p)
+        # Add barangay name from loaded relationship
+        if p.barangay:
+            purok_dict["barangay_name"] = p.barangay.name
+        else:
+            purok_dict["barangay_name"] = "N/A"
+        output.append(purok_dict)
+    
+    return output
 
 
 @router.get("/api/puroks/{purok_id}")
 async def purok_detail(purok_id: UUID, db: AsyncSession = Depends(get_db)):
-    p = await db.get(Purok, purok_id)
+    # Eagerly load the barangay relationship
+    stmt = select(Purok).where(Purok.id == purok_id).options(selectinload(Purok.barangay))
+    result = await db.execute(stmt)
+    p = result.scalar_one_or_none()
+    
     if not p:
         raise HTTPException(404, "Purok not found")
+    
+    # Get barangay name safely
+    barangay_name = "N/A"
+    if p.barangay_id:
+        barangay = await db.get(Barangay, p.barangay_id)
+        if barangay:
+            barangay_name = barangay.name
+    
     children = (await db.scalars(select(Child).where(Child.purok_id == purok_id, Child.is_active == True))).all()
     measurements = await latest_measurements(db)
     p_meas = [m for m in measurements if m.child and m.child.purok_id == purok_id]
     prevalence = calculate_prevalence(p_meas) if p_meas else {}
     risk = classify_risk_level(prevalence) if prevalence else "low"
     active_cases = sum(1 for m in p_meas if m.overall_status.value in ("severe_acute_malnutrition", "moderate_acute_malnutrition"))
+    
+    # Calculate analytics data for the analytics tab
+    # Nutritional status distribution
+    normal_count = sum(1 for m in p_meas if m.overall_status.value == "normal")
+    at_risk_count = sum(1 for m in p_meas if m.overall_status.value == "moderate_acute_malnutrition")
+    critical_count = sum(1 for m in p_meas if m.overall_status.value == "severe_acute_malnutrition")
+    
+    # Age distribution (0-6, 6-24, 24-59 months)
+    age_0_6 = sum(1 for m in p_meas if 0 <= m.age_in_months < 6)
+    age_6_24 = sum(1 for m in p_meas if 6 <= m.age_in_months < 24)
+    age_24_59 = sum(1 for m in p_meas if 24 <= m.age_in_months <= 59)
+    
+    # Gender distribution
+    male_count = sum(1 for c in children if c.sex == "M")
+    female_count = sum(1 for c in children if c.sex == "F")
+    
+    # Program stats
+    programs = (await db.scalars(
+        select(NutritionProgram).where(NutritionProgram.purok_id == purok_id)
+    )).all()
+    active_programs = sum(1 for prog in programs if prog.status == "active")
+    completed_programs = sum(1 for prog in programs if prog.status == "completed")
+    
+    # Home visit stats (this month)
+    today = datetime.today().date()
+    first_day = today.replace(day=1)
+    # Query home visits through child_id since HomeVisit doesn't have purok_id
+    child_ids = [c.id for c in children]
+    home_visits_stmt = select(func.count(HomeVisit.id)).where(
+        HomeVisit.child_id.in_(child_ids),
+        HomeVisit.scheduled_date >= first_day
+    )
+    home_visits_this_month = await db.scalar(home_visits_stmt) or 0
+    
+    # Assessment coverage
+    assessed_children = sum(1 for m in p_meas if m is not None)
+    assessment_coverage_percent = round((assessed_children / len(children) * 100) if len(children) > 0 else 0, 1)
+    
+    # Performance indicators
+    monitoring_coverage = assessment_coverage_percent
+    program_participation = round((active_programs / len(children) * 100) if len(children) > 0 else 0, 1)
+    recovery_rate = round((normal_count / len(p_meas) * 100) if len(p_meas) > 0 else 0, 1)
+    
     return {
         **_purok_out(p),
+        "barangay_name": barangay_name,  # Override with fetched name
         "child_count": len(children),
         "active_cases": active_cases,
         "prevalence": prevalence,
         "risk_level": risk,
+        # Analytics data
+        "nutrition_status": {
+            "normal": normal_count,
+            "at_risk": at_risk_count,
+            "critical": critical_count
+        },
+        "age_distribution": {
+            "0-6": age_0_6,
+            "6-24": age_6_24,
+            "24-59": age_24_59
+        },
+        "gender_distribution": {
+            "male": male_count,
+            "female": female_count
+        },
+        "program_stats": {
+            "active": active_programs,
+            "completed": completed_programs
+        },
+        "home_visit_stats": {
+            "this_month": home_visits_this_month
+        },
+        "assessment_stats": {
+            "coverage_percent": assessment_coverage_percent
+        },
+        "performance": {
+            "monitoring_coverage": monitoring_coverage,
+            "program_participation": program_participation,
+            "recovery_rate": recovery_rate
+        }
     }
 
 
 @router.get("/api/puroks/{purok_id}/stats")
-async def purok_stats(purok_id: UUID, db: AsyncSession = Depends(get_db)):
-    measurements = await latest_measurements(db)
-    measurements = [m for m in measurements if m.child and m.child.purok_id == purok_id]
-    prevalence = calculate_prevalence(measurements)
-    return {"prevalence": prevalence, "risk_level": classify_risk_level(prevalence)}
+async def purok_stats(
+    purok_id: UUID, 
+    year: int = Query(None, description="Filter measurements by year"),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get purok statistics with optional year filtering.
+    Returns prevalence data and risk level for the specific purok.
+    """
+    # Get measurements - filter by year if provided
+    if year:
+        start_date = date(year, 1, 1)
+        end_date = date(year, 12, 31)
+        # Get ALL measurements for the year (for OPT+ count - all records)
+        stmt = (
+            select(Measurement)
+            .join(Child, Child.id == Measurement.child_id)
+            .where(
+                Child.purok_id == purok_id,
+                Measurement.measurement_date.between(start_date, end_date),
+                Measurement.age_in_months >= 0,
+                Measurement.age_in_months <= 59
+            )
+        )
+        all_measurements = (await db.scalars(stmt)).all()
+        
+        # Get LATEST measurements for status/prevalence analysis (filtered by year and age)
+        latest_meas = await latest_measurements(db, None, year)
+        measurements = [m for m in latest_meas if m.child and m.child.purok_id == purok_id]
+    else:
+        measurements = await latest_measurements(db)
+        measurements = [m for m in measurements if m.child and m.child.purok_id == purok_id]
+        all_measurements = measurements
+    
+    prevalence = calculate_prevalence(measurements) if measurements else {}
+    risk_level = classify_risk_level(prevalence) if prevalence else "low"
+    
+    return {
+        "purok_id": str(purok_id),
+        "year": year or date.today().year,
+        "total_measurements": len(all_measurements),  # All records (OPT+ count)
+        "active_cases": sum(1 for m in measurements if m.overall_status.value in ("severe_acute_malnutrition", "moderate_acute_malnutrition")),
+        "prevalence": prevalence,
+        "risk_level": risk_level
+    }
 
 
 class PurokIn(BaseModel):

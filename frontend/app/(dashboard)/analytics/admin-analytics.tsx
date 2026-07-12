@@ -9,12 +9,14 @@ import {
   ChevronDown,
   ChevronUp,
   AlertCircle,
-  RefreshCw
+  RefreshCw,
+  Zap
 } from "lucide-react";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, BarChart, Bar, Legend, AreaChart, Area
 } from "recharts";
+import { NutritionalStatusAnalytics } from "./NutritionalStatusAnalytics";
 
 interface AdminAnalyticsProps {
   selectedYear: number;
@@ -297,6 +299,15 @@ export function AdminAnalytics({
             </>
           )}
         </div>
+      </div>
+
+      {/* Nutritional Status Analytics Section */}
+      <div className="admin-glass-panel p-6 border-l-4 border-l-blue-500">
+        <div className="flex items-center gap-3 mb-6">
+          <Zap className="h-6 w-6 text-blue-600" />
+          <h2 className="text-lg font-extrabold text-slate-900">📊 Nutritional Status Analytics (Operation Timbang)</h2>
+        </div>
+        <NutritionalStatusAnalytics selectedYear={selectedYear} />
       </div>
     </div>
   );

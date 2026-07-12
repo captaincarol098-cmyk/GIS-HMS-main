@@ -1,7 +1,8 @@
 "use client";
 import "@/styles/admin.css";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/auth";
 import { DynamicMap } from "@/components/map/MapContainer";
 import { MapControls } from "@/components/map/MapControls";
@@ -9,6 +10,42 @@ import { MapSidebar } from "@/components/map/MapSidebar";
 
 export default function MapPage() {
   const { user } = useAuthStore();
+  const router = useRouter();
+  const [barangayParam, setBarangayParam] = useState<string | null>(null);
+
+  // Listen to URL changes to update barangayParam
+  useEffect(() => {
+    const updateBarangayParam = () => {
+      try {
+        const params = new URL(window.location.href).searchParams;
+        const newBarangayParam = params.get("barangay");
+        console.log('[MapPage] URL changed, barangay param:', newBarangayParam);
+        setBarangayParam(newBarangayParam);
+      } catch (e) {
+        // SSR fallback
+      }
+    };
+
+    // Initial load
+    updateBarangayParam();
+
+    // Listen to popstate (back/forward navigation)
+    window.addEventListener('popstate', updateBarangayParam);
+    
+    // Listen to custom event for programmatic navigation
+    window.addEventListener('urlchange', updateBarangayParam);
+
+    return () => {
+      window.removeEventListener('popstate', updateBarangayParam);
+      window.removeEventListener('urlchange', updateBarangayParam);
+    };
+  }, []);
+
+  // Debug log when barangay param changes
+  useEffect(() => {
+    console.log('[MapPage] Barangay param state updated to:', barangayParam);
+  }, [barangayParam]);
+  
   const isAdmin = user?.role === "admin";
   const title   = isAdmin ? "Purok Map" : "Cabadbaran City Map";
   const subtitle = isAdmin
@@ -40,6 +77,7 @@ export default function MapPage() {
             showHomeVisits={showHomeVisits}
             showFacilities={showFacilities}
             showPredictions={showPredictions}
+            focusBarangay={barangayParam}
           />
         </section>
 

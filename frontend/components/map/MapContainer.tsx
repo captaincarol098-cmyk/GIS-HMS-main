@@ -8,8 +8,11 @@ interface DynamicMapProps {
   showHomeVisits: boolean;
   showFacilities: boolean;
   showPredictions: boolean;
+  focusBarangay?: string | null;
 }
 
+// Use the full-featured MapView for both admin and superadmin
+// MapView automatically adapts based on user role
 export const DynamicMap = dynamic(
   () => import("./MapView").then((m) => m.MapView),
   {

@@ -6,10 +6,11 @@ from datetime import date, timedelta
 from uuid import UUID
 from sqlalchemy import select, func, extract
 from sqlalchemy.ext.asyncio import AsyncSession
-from ..models import Alert, Barangay, Measurement, Child, Purok
+from ..models import Alert, Barangay, Measurement, Child, Purok, SystemSetting
 from ..models.entities import AlertType, Severity
 from ..utils.who_zscore import calculate_prevalence
 from ..services.analytics import latest_measurements
+import json
 
 
 # Multi-Tier Alert Thresholds (Recommended System)
@@ -393,16 +394,35 @@ async def generate_population_alerts(
 
 async def get_alert_configuration(db: AsyncSession) -> dict:
     """
-    Get current alert threshold configuration.
-    In future, this can read from system_settings table for CHO configurability.
+    Get current alert threshold configuration from database or use defaults.
+    Can be modified by both admin and superadmin via API.
     """
+    from ..models import SystemSetting
+    import json
+    
+    # Try to fetch thresholds from database
+    try:
+        thresholds_setting = await db.scalar(
+            select(SystemSetting).where(SystemSetting.key == "alert_thresholds")
+        )
+        if thresholds_setting and thresholds_setting.value:
+            thresholds = json.loads(thresholds_setting.value)
+        else:
+            thresholds = DEFAULT_ALERT_THRESHOLDS
+    except Exception:
+        thresholds = DEFAULT_ALERT_THRESHOLDS
+    
+    # Update module-level thresholds
+    global ALERT_THRESHOLDS
+    ALERT_THRESHOLDS = thresholds
+    
     return {
-        "thresholds": ALERT_THRESHOLDS,
+        "thresholds": thresholds,
         "target_age_range": {
             "min_months": TARGET_AGE_MIN,
             "max_months": TARGET_AGE_MAX,
             "description": "0-5 years old"
         },
-        "configurable": False,  # TODO: Implement CHO configuration UI
-        "last_check": None  # TODO: Track last scheduled run
+        "configurable": True,
+        "last_updated": None
     }
