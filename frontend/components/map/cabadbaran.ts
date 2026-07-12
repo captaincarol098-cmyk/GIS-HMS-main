@@ -54,7 +54,18 @@ export const TILE_LAYERS = {
     url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
     attribution: "Tiles &copy; Esri — Source: Esri, Maxar, GeoEye, Earthstar Geographics",
   },
+  // Street view with detailed roads and labels
+  Streets: {
+    url: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+    attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
+  },
 } as const;
+
+// ─── Street Labels Overlay (for Satellite + Streets hybrid) ──────────────────
+export const STREET_LABELS_OVERLAY = {
+  url: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png",
+  attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
+};
 
 export type TileLayerKey = keyof typeof TILE_LAYERS;
 

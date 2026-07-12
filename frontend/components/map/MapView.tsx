@@ -16,6 +16,7 @@ import {
   CABADBARAN_MASK,
   EXCLUDED_BARANGAY_NAMES,
   TILE_LAYERS,
+  STREET_LABELS_OVERLAY,
   type TileLayerKey,
 } from "./cabadbaran";
 
@@ -1215,6 +1216,15 @@ export function MapView({
         >
           <MapCenterController center={mapCenter} zoom={mapZoom} />
           <TileLayer key={tileKey} attribution={tile.attribution} url={tile.url} />
+          
+          {/* Street labels overlay for Satellite and Terrain views */}
+          {(tileKey === "Satellite" || tileKey === "Terrain") && (
+            <TileLayer
+              url={STREET_LABELS_OVERLAY.url}
+              attribution={STREET_LABELS_OVERLAY.attribution}
+              zIndex={1000}
+            />
+          )}
 
           {/* Barangay boundaries (render first, below puroks) */}
           {barangayFeatures && barangayFeatures.features?.length > 0 && (
