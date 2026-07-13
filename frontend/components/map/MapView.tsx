@@ -381,7 +381,7 @@ function buildPopupHtml(props: BarangaySeverity) {
 const GEO = { south: 9.07, north: 9.20, west: 125.51, east: 125.65 } as const;
 
 // ─── IDW Canvas heatmap layer (malnutrition intensity) ───────────────────────
-function IDWCanvasLayer({ data, showLabels = true, colorMode = "red-yellow-green" }: { data: BarangaySeverity[]; showLabels?: boolean; colorMode?: HeatmapColorMode }) {
+function IDWCanvasLayer({ data, showLabels = true, colorMode = "red-yellow-green", opacity = 0.82 }: { data: BarangaySeverity[]; showLabels?: boolean; colorMode?: HeatmapColorMode; opacity?: number }) {
   const map = useMap();
   const overlayRef = useRef<L.ImageOverlay | null>(null);
   const groupRef   = useRef<L.LayerGroup | null>(null);
@@ -438,7 +438,7 @@ function IDWCanvasLayer({ data, showLabels = true, colorMode = "red-yellow-green
     bCtx.drawImage(raw, 0, 0);
 
     const overlay = L.imageOverlay(blurred.toDataURL("image/png"), [[GEO.south, GEO.west],[GEO.north, GEO.east]], {
-      opacity: 0.82, interactive: false, zIndex: 400,
+      opacity: opacity, interactive: false, zIndex: 400,
     });
     overlay.addTo(map);
     overlayRef.current = overlay;
@@ -477,7 +477,7 @@ function IDWCanvasLayer({ data, showLabels = true, colorMode = "red-yellow-green
       if (groupRef.current)   map.removeLayer(groupRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, showLabels, colorMode]);
+  }, [data, showLabels, colorMode, opacity]);
 
   return null;
 }
@@ -1272,20 +1272,14 @@ export function MapView({
             />
           )}
           
-          {/* For Heatmap tile layer mode, show light background with labels */}
+          {/* For Heatmap tile layer mode, show ONLY heatmap with minimal background - no street labels */}
           {tileKey === "Heatmap" && (
-            <>
-              <TileLayer 
-                url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-                attribution="&copy; OpenStreetMap contributors &copy; CARTO"
-                zIndex={100}
-              />
-              <TileLayer
-                url={STREET_LABELS_OVERLAY.url}
-                attribution={STREET_LABELS_OVERLAY.attribution}
-                zIndex={1000}
-              />
-            </>
+            <TileLayer 
+              url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+              attribution="&copy; OpenStreetMap contributors &copy; CARTO"
+              zIndex={100}
+              opacity={0.15}
+            />
           )}
 
           {/* Barangay boundaries (render first, below puroks) */}
@@ -1337,7 +1331,12 @@ export function MapView({
 
           {/* IDW heatmap overlay — show when: toggle is ON AND showHotspots is true, OR when Heatmap tile layer is selected */}
           {((heatmapOn && showHotspots) || tileKey === "Heatmap") && barangayList.length > 0 && (
-            <IDWCanvasLayer data={barangayList} showLabels={showHotspots} colorMode={heatmapColorMode} />
+            <IDWCanvasLayer 
+              data={barangayList} 
+              showLabels={tileKey !== "Heatmap"} 
+              colorMode={heatmapColorMode}
+              opacity={tileKey === "Heatmap" ? 0.95 : 0.82}
+            />
           )}
 
           {/* Layer icons overlay on barangays */}
