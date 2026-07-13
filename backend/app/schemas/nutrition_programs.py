@@ -54,6 +54,8 @@ class ProgramSessionOut(BaseModel):
 class NutritionProgramIn(BaseModel):
     name: str
     description: Optional[str] = None
+    program_type: str = "Other"  # ProgramType enum value
+    funding_source: str = "City Funded Program"  # FundingSource enum value
     purok_id: UUID
     frequency: str  # "weekly" or "monthly"
     status: str = "active"
@@ -64,6 +66,8 @@ class NutritionProgramIn(BaseModel):
 class NutritionProgramUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
+    program_type: Optional[str] = None
+    funding_source: Optional[str] = None
     frequency: Optional[str] = None
     status: Optional[str] = None
     government_funded: Optional[bool] = None
@@ -74,11 +78,15 @@ class NutritionProgramOut(BaseModel):
     id: UUID
     name: str
     description: Optional[str]
+    program_type: str
+    funding_source: str
     purok_id: UUID
     frequency: str
     status: str
     government_funded: bool
     budget_amount: Optional[float]
+    ai_recommended_budget: Optional[float]
+    ai_recommendation_notes: Optional[str]
     approval_status: str
     comments: Optional[str]
     created_at: datetime
@@ -92,11 +100,15 @@ class NutritionProgramWithSessionsOut(BaseModel):
     id: UUID
     name: str
     description: Optional[str]
+    program_type: str
+    funding_source: str
     purok_id: UUID
     frequency: str
     status: str
     government_funded: bool
     budget_amount: Optional[float]
+    ai_recommended_budget: Optional[float]
+    ai_recommendation_notes: Optional[str]
     approval_status: str
     comments: Optional[str]
     sessions: List[ProgramSessionOut] = []

@@ -6,6 +6,7 @@ export { GISHotspotAnalysis } from './GISHotspotAnalysis';
 export { ProgramAccomplishmentAnalysis } from './ProgramAccomplishmentAnalysis';
 export { InterventionEffectivenessAnalysis } from './InterventionEffectivenessAnalysis';
 export { AlertIncidentAnalysis } from './AlertIncidentAnalysis';
+export { OptPlusDetailedAnalysis } from './OptPlusDetailedAnalysis';
 export { ForecastingAnalysis } from './ForecastingAnalysis';
 export { DecisionSupport } from './DecisionSupport';
 export { BarangayComplianceEvaluation } from './BarangayComplianceEvaluation';

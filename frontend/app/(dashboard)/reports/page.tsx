@@ -64,6 +64,13 @@ export default function ReportsPage() {
     refetchInterval: 10_000,
   });
 
+  // Fetch OPT Plus report data
+  const optPlusQuery = useQuery({
+    queryKey: ["opt-plus-report", selectedYear],
+    queryFn: () => api.get(`/api/opt-plus/report?year=${selectedYear}`).then(r => r.data),
+    refetchInterval: 15_000,
+  });
+
   // Fetch selected report data
   const selectedReportQuery = useQuery({
     queryKey: ["saved-report", selectedReportId],
@@ -223,6 +230,7 @@ export default function ReportsPage() {
           { type: "Referral Follow-up", count: (alerts || []).filter((a: any) => a.priority === "medium").length, responseTime: "6.0 hrs", resolutionRate: 85 },
         ],
       },
+      optPlus: optPlusQuery.data || {},
       forecasting: {
         seasonalPatterns: [
           "Nutrition status typically declines during lean months (May-August)",
@@ -293,7 +301,7 @@ export default function ReportsPage() {
         ],
       },
     };
-  }, [summaryQuery.data, programsQuery.data, barangaysQuery.data, alertsQuery.data]);
+  }, [summaryQuery.data, programsQuery.data, barangaysQuery.data, alertsQuery.data, optPlusQuery.data]);
 
   // Download comprehensive report as PDF with proper A4 formatting
   const downloadReportAsPDF = async () => {

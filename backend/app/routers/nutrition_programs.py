@@ -9,7 +9,8 @@ from typing import Optional
 from ..database import get_db
 from ..models.entities import (
     NutritionProgram, ProgramSession, ProgramParticipant, Child, 
-    Measurement, OverallStatus, User, Purok, ActivityLog, ActivityLogType
+    Measurement, OverallStatus, User, Purok, ActivityLog, ActivityLogType,
+    ProgramType, FundingSource
 )
 from ..schemas.nutrition_programs import (
     NutritionProgramIn, NutritionProgramOut, NutritionProgramUpdate,
@@ -20,6 +21,21 @@ from ..schemas.nutrition_programs import (
 from ..middleware.rbac import get_current_user
 
 router = APIRouter(prefix="/api/nutrition-programs", tags=["nutrition-programs"])
+
+
+@router.get("/enums")
+async def get_program_enums():
+    """Get enum values for program types and funding sources"""
+    return {
+        "program_types": [
+            {"value": pt.value, "label": pt.value} 
+            for pt in ProgramType
+        ],
+        "funding_sources": [
+            {"value": fs.value, "label": fs.value} 
+            for fs in FundingSource
+        ]
+    }
 
 
 @router.get("", response_model=list[NutritionProgramOut])
@@ -69,7 +85,7 @@ async def create_nutrition_program(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Create a new nutrition program for a purok"""
+    """Create a new nutrition program for a purok with AI budget recommendation"""
     if current_user.role not in ["admin", "super_admin"]:
         raise HTTPException(status_code=403, detail="Not authorized")
     
@@ -85,14 +101,28 @@ async def create_nutrition_program(
     if current_user.role == "admin" and purok.barangay_id != current_user.barangay_id:
         raise HTTPException(status_code=403, detail="Not authorized to create program in this purok")
     
+    # Generate AI budget recommendation
+    from ..services.program_budget_ai import generate_program_budget_recommendation
+    ai_recommendation = await generate_program_budget_recommendation(
+        db=db,
+        program_type=body.program_type,
+        funding_source=body.funding_source,
+        purok_id=body.purok_id,
+        frequency=body.frequency
+    )
+    
     program = NutritionProgram(
         name=body.name,
         description=body.description,
+        program_type=body.program_type,
+        funding_source=body.funding_source,
         purok_id=body.purok_id,
         frequency=body.frequency,
         status=body.status,
         government_funded=body.government_funded,
-        budget_amount=body.budget_amount,
+        budget_amount=body.budget_amount or ai_recommendation["recommended_budget"],
+        ai_recommended_budget=ai_recommendation["recommended_budget"],
+        ai_recommendation_notes=ai_recommendation["recommendation_notes"],
         created_by=current_user.id
     )
     
@@ -105,10 +135,19 @@ async def create_nutrition_program(
         current_user.id,
         purok.barangay_id,
         ActivityLogType.other,
-        f"Created nutrition program: {body.name}",
+        f"Created nutrition program: {body.name} with AI budget recommendation: ₱{ai_recommendation['recommended_budget']:,.2f}",
         resource_type="nutrition_program",
         resource_id=program.id,
-        details={"program_name": body.name, "purok_id": str(body.purok_id), "frequency": body.frequency, "government_funded": body.government_funded}
+        details={
+            "program_name": body.name, 
+            "program_type": body.program_type,
+            "funding_source": body.funding_source,
+            "purok_id": str(body.purok_id), 
+            "frequency": body.frequency, 
+            "government_funded": body.government_funded,
+            "ai_recommended_budget": ai_recommendation["recommended_budget"],
+            "user_budget": body.budget_amount
+        }
     )
     
     await db.commit()

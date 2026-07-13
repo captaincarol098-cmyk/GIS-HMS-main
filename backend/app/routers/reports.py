@@ -29,15 +29,16 @@ async def list_reports(
 ):
     """
     List saved reports based on user role with year filtering.
-    - SuperAdmin sees ALL reports with filters (submitted, approved, rejected, revision)
+    - SuperAdmin sees ALL reports with filters (draft, submitted, approved, rejected, revision)
     - Admin sees only their own barangay's reports
-    - Returns submitted, approved, rejected, and revision reports (no drafts)
+    - Returns draft, submitted, approved, rejected, and revision reports
     - Filter by status, barangay, and year
     """
     stmt = select(Report).order_by(Report.generated_at.desc())
     
-    # Filter by status - show submitted/approved/rejected/revision reports (not drafts)
+    # Filter by status - show all reports except hard deletes (includes drafts, submitted, etc.)
     status_filter = [
+        ReportStatus.draft,
         ReportStatus.submitted,
         ReportStatus.approved,
         ReportStatus.rejected,
@@ -56,6 +57,11 @@ async def list_reports(
         # If admin (not superadmin), only show reports from their barangay
         if user.role != "super_admin" and user.barangay_id:
             stmt = stmt.where(Report.barangay_id == user.barangay_id)
+        # For admins, also ensure they can see draft reports they created
+        # SuperAdmin can see all reports
+    else:
+        # If no user, only return non-draft reports (public-facing)
+        stmt = stmt.where(Report.status != ReportStatus.draft)
     
     # Optional status filter
     if status:

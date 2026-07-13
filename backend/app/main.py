@@ -41,11 +41,15 @@ app.add_middleware(
         "http://127.0.0.1:8000",  # Added backend itself
     ],
     allow_credentials=True,
-    allow_methods=["*"],  # Allow all methods
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],  # Be explicit
     allow_headers=["*"],  # Allow all headers
     expose_headers=["*"],
     max_age=3600,  # Cache preflight for 1 hour
 )
+
+logger.info("CORS middleware configured for origins:")
+logger.info("  - http://localhost:3000, http://localhost:3001, http://localhost:8888")
+logger.info("  - http://127.0.0.1:3000, http://127.0.0.1:3001, http://127.0.0.1:8888")
 
 @app.on_event("startup")
 async def startup():

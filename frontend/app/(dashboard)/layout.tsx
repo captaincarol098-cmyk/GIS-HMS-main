@@ -46,6 +46,7 @@ import {
   Pause
 } from "lucide-react";
 import { useAuthStore } from "@/store/auth";
+import { ToastProvider } from "@/lib/toast-context";
 
 interface NavSubItem {
   label: string;
@@ -62,7 +63,7 @@ interface NavItem {
 interface ToastMessage {
   id: string;
   message: string;
-  type: "alert" | "log";
+  type: "alert" | "log" | "success" | "error";
 }
 
 // Nutrition Banner Component
@@ -354,7 +355,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   }, [logsQuery.data, user]);
 
-  function addToast(message: string, type: "alert" | "log") {
+  function addToast(message: string, type: "alert" | "log" | "success" | "error") {
     const id = Math.random().toString();
     setToasts((prev) => [...prev, { id, message, type }]);
     setTimeout(() => removeToast(id), 6000);
@@ -458,10 +459,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <div className="flex h-screen flex-col overflow-hidden bg-slate-50 font-sans">
       
       {/* Top Header - Styled in Green */}
-      <header className="flex h-28 shrink-0 items-start justify-between bg-[#1b4324] px-4 text-white shadow-md z-10 border-b border-white/10">
+      <header className="flex h-28 shrink-0 items-center justify-between bg-[#1b4324] px-4 text-white shadow-md z-10 border-b border-white/10">
         
         {/* Left header segment - Logo and Title */}
-        <div className="flex items-center gap-3 pt-2">
+        <div className="flex items-end gap-0.10 pb-5">
           {/* Combined Logo */}
           <img 
             src="/logos.png" 
@@ -469,12 +470,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             className="h-24 w-auto object-contain drop-shadow-lg flex-shrink-0"
           />
           
-          {/* Title Section */}
+          {/* Title Section - positioned lower, aligned to bottom */}
           <div className="flex-1">
             <h1 className="text-lg font-black text-white uppercase leading-tight tracking-tighter">
               HEALTH MONITORING SYSTEM FOR CHILD MALNUTRITION MANAGEMENT CASES
             </h1>
-            <p className="text-sm text-brandLightGreen font-bold mt-2 tracking-tight">
+            <p className="text-sm text-brandLightGreen font-bold mt-1 tracking-tight">
               City Health Office, Cabadbaran City
             </p>
           </div>
@@ -767,7 +768,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* Content Wrapper */}
         <main className="flex min-w-0 flex-1 flex-col overflow-y-auto p-6 relative bg-cover bg-center" style={{ backgroundImage: "url('/dashboard_bg.png')" }}>
-          {children}
+          <ToastProvider addToast={addToast}>
+            {children}
+          </ToastProvider>
 
           {/* Floating Toast Notification Container */}
           <div className="fixed top-20 right-6 z-50 space-y-3 max-w-sm pointer-events-none">
@@ -777,6 +780,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 className={`pointer-events-auto rounded-xl border p-4 shadow-xl flex items-start gap-3 w-80 animate-in slide-in-from-right-10 duration-300 ${
                   t.type === "alert"
                     ? "bg-red-50 border-red-100 text-red-900 font-medium animate-bounce"
+                    : t.type === "success"
+                    ? "bg-green-50 border-green-100 text-green-900 font-medium"
+                    : t.type === "error"
+                    ? "bg-red-50 border-red-100 text-red-900 font-medium"
                     : "bg-blue-50 border-blue-100 text-blue-900 font-medium"
                 }`}
               >

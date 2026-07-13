@@ -10,6 +10,7 @@ import {
   ProgramAccomplishmentAnalysis,
   InterventionEffectivenessAnalysis,
   AlertIncidentAnalysis,
+  OptPlusDetailedAnalysis,
   ForecastingAnalysis,
   DecisionSupport,
   BarangayComplianceEvaluation,
@@ -26,6 +27,7 @@ interface NutritionReportData {
   programAccomplishment?: any;
   interventionEffectiveness?: any;
   alertIncident?: any;
+  optPlus?: any;
   forecasting?: any;
   decisionSupport?: any;
   barangayCompliance?: any;
@@ -48,11 +50,12 @@ const CHAPTERS_SUPERADMIN = [
   { id: 6, title: 'Program Accomplishment Analysis', key: 'programAccomplishment' },
   { id: 7, title: 'Intervention Effectiveness Analysis', key: 'interventionEffectiveness' },
   { id: 8, title: 'Alert & Incident Analysis', key: 'alertIncident' },
-  { id: 9, title: 'Forecasting Analysis', key: 'forecasting' },
-  { id: 10, title: 'Decision Support', key: 'decisionSupport' },
-  { id: 11, title: 'Barangay Compliance Evaluation', key: 'barangayCompliance' },
-  { id: 12, title: 'Overall Conclusion', key: 'conclusion' },
-  { id: 13, title: 'Appendices', key: 'appendices' },
+  { id: 9, title: 'Operation Timbang Plus Detailed Analysis', key: 'optPlus' },
+  { id: 10, title: 'Forecasting Analysis', key: 'forecasting' },
+  { id: 11, title: 'Decision Support', key: 'decisionSupport' },
+  { id: 12, title: 'Barangay Compliance Evaluation', key: 'barangayCompliance' },
+  { id: 13, title: 'Overall Conclusion', key: 'conclusion' },
+  { id: 14, title: 'Appendices', key: 'appendices' },
 ];
 
 const CHAPTERS_ADMIN = [
@@ -74,6 +77,7 @@ const chapterComponentMap: Record<string, React.ComponentType<any>> = {
   programAccomplishment: ProgramAccomplishmentAnalysis,
   interventionEffectiveness: InterventionEffectivenessAnalysis,
   alertIncident: AlertIncidentAnalysis,
+  optPlus: OptPlusDetailedAnalysis,
   forecasting: ForecastingAnalysis,
   decisionSupport: DecisionSupport,
   barangayCompliance: BarangayComplianceEvaluation,

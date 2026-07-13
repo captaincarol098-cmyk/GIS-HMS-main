@@ -61,7 +61,7 @@ export function SavedReportsManager({ onSelectReport }: SavedReportsManagerProps
   const [editContent, setEditContent] = useState<string>("");
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: "success" | "error"; message: string } | null>(null);
-  const [filterCategory, setFilterCategory] = useState<"all" | "comprehensive" | "quick">("all");
+  const [filterCategory, setFilterCategory] = useState<"all" | "comprehensive" | "quick" | "program">("all");
   const [searchQuery, setSearchQuery] = useState("");
 
   const reportsQuery = useQuery({
@@ -71,12 +71,10 @@ export function SavedReportsManager({ onSelectReport }: SavedReportsManagerProps
   });
 
   const filteredReports = (reportsQuery.data || []).filter((r: SavedReport) => {
-    // Filter out rejected/revision reports
-    if (["rejected", "revision"].includes(r.status)) return false;
-
     // Filter by category
     if (filterCategory === "comprehensive" && r.report_category !== "comprehensive") return false;
     if (filterCategory === "quick" && r.report_category === "comprehensive") return false;
+    if (filterCategory === "program" && r.report_category !== "program_activities") return false;
 
     // Search filter
     if (searchQuery) {
@@ -570,6 +568,15 @@ Report ID: RPT-${new Date().getFullYear()}-${report.id.substring(0, 8).toUpperCa
           >
             Quick Reports
           </button>
+          <button
+            onClick={() => setFilterCategory("program")}
+            className={`px-4 py-2 text-xs font-bold rounded-lg border transition-colors ${filterCategory === "program"
+                ? "bg-indigo-600 text-white border-indigo-600"
+                : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+              }`}
+          >
+            Program Activities
+          </button>
         </div>
       </div>
 
@@ -585,11 +592,18 @@ Report ID: RPT-${new Date().getFullYear()}-${report.id.substring(0, 8).toUpperCa
         <div className="bg-white border border-slate-200 rounded-xl p-12 text-center">
           <FileText className="h-12 w-12 text-slate-200 mx-auto mb-3" />
           <p className="text-sm font-bold text-slate-500">No reports found</p>
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="text-xs text-slate-400 mt-1 mb-4">
             {searchQuery
               ? "Try adjusting your search query"
-              : "Generate a new report to get started"}
+              : reportsQuery.data?.length === 0 
+              ? "Generate a new report using the 'Save Report' button above to get started"
+              : "No reports match your current filters"}
           </p>
+          {reportsQuery.data?.length === 0 && (
+            <a href="#comprehensive" className="inline-flex items-center gap-2 text-indigo-600 hover:text-indigo-700 font-semibold text-xs mt-2">
+              ↑ Go to Comprehensive Report tab
+            </a>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-3">

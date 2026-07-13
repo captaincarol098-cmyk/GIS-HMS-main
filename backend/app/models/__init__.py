@@ -26,6 +26,8 @@ from .entities import (
     NutritionProgram,
     ProgramSession,
     ProgramParticipant,
+    ProgramType,
+    FundingSource,
 )
 
 __all__ = [
@@ -56,5 +58,7 @@ __all__ = [
     "NutritionProgram",
     "ProgramSession",
     "ProgramParticipant",
+    "ProgramType",
+    "FundingSource",
 ]
 

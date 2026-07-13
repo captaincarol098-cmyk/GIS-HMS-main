@@ -84,6 +84,7 @@ class ReportType(str, enum.Enum):
     quarterly = "quarterly"
     annual = "annual"
     custom = "custom"
+    program_activities = "program_activities"
 
 
 class ReportStatus(str, enum.Enum):
@@ -119,6 +120,24 @@ class ProgramStatus(str, enum.Enum):
     active = "active"
     inactive = "inactive"
     completed = "completed"
+
+
+class ProgramType(str, enum.Enum):
+    feeding_program = "Feeding Program"
+    vitamin_supplementation = "Vitamin Supplementation"
+    deworming = "Deworming"
+    health_screening = "Health Screening"
+    nutrition_education = "Nutrition Education"
+    growth_monitoring = "Growth Monitoring"
+    operation_timbang_plus = "Operation Timbang Plus"
+    other = "Other"
+
+
+class FundingSource(str, enum.Enum):
+    city_funded = "City Funded Program"
+    barangay_funded = "Barangay Funded Program"
+    operation_timbang_plus = "Operation Timbang Plus Program"
+    other = "Other"
 
 
 class ActivityLogType(str, enum.Enum):
@@ -387,11 +406,15 @@ class NutritionProgram(Base, TimestampMixin):
     id = uuid_pk()
     name: Mapped[str] = mapped_column(String(220), index=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    program_type: Mapped[str] = mapped_column(String(50), default="Other")
+    funding_source: Mapped[str] = mapped_column(String(50), default="City Funded Program")
     purok_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("puroks.id"))
     frequency: Mapped[ProgramFrequency] = mapped_column(Enum(ProgramFrequency))
     status: Mapped[ProgramStatus] = mapped_column(Enum(ProgramStatus), default=ProgramStatus.active)
     government_funded: Mapped[bool] = mapped_column(Boolean, default=False)
     budget_amount: Mapped[float | None] = mapped_column(Float, nullable=True)
+    ai_recommended_budget: Mapped[float | None] = mapped_column(Float, nullable=True)
+    ai_recommendation_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     approval_status: Mapped[str] = mapped_column(String(40), default="pending")  # pending, approved, revision, rejected
     comments: Mapped[str | None] = mapped_column(Text, nullable=True)

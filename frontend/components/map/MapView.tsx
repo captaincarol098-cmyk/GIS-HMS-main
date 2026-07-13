@@ -821,32 +821,8 @@ function BarangayGeoJSON({
             });
           }
           const props = feature.properties as BarangaySeverity;
-          // Use buildPopupHtml to ensure consistent enhanced information
-          const popupContent = buildPopupHtml(props);
-          console.log('[BarangayGeoJSON] Popup content created for:', props.name);
           
-          // Smart offset - adjust based on barangay location to ensure visibility
-          // Format: [horizontal, vertical] where positive vertical = downward
-          let popupOffset: [number, number] = [20, 50]; // Default: 20px right, 50px down
-          
-          // For barangays on the right edge, show popup to the left
-          const rightEdgeBarangays = ['Del Pilar', 'Poblacion 8', 'Poblacion 10', 'Katugasan'];
-          if (rightEdgeBarangays.includes(props.name)) {
-            popupOffset = [-280, 50]; // Show to the left, 50px down to be more visible
-            console.log('[BarangayGeoJSON] Using LEFT offset for:', props.name);
-          }
-          
-          // Bind popup (will show on click or manual open)
-          layer.bindPopup(popupContent, { 
-            closeButton: true, 
-            autoClose: false,
-            maxWidth: 700,
-            minWidth: 550,
-            className: "map-popup map-popup-visible",
-            offset: popupOffset,
-            autoPan: false,
-            keepInView: false,
-          });
+          // NOTE: Removed popup binding - click now navigates directly to details page
           
           // Create a TOOLTIP for hover (simpler, no flickering)
           const tooltipContent = `<div style="font-weight: bold; font-size: 13px; padding: 4px 8px;">${props.name}</div>`;

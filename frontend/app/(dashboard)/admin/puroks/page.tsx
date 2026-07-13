@@ -46,7 +46,7 @@ export default function PurokManagementPage() {
   const [showArchiveModal, setShowArchiveModal] = useState<string | null>(null);
   const [barangayFilter, setBarangayFilter] = useState("");
   const [showPurokModal, setShowPurokModal] = useState(false);
-  const [purokModalTab, setPurokModalTab] = useState<"overview" | "children" | "programs" | "home-visits" | "assessments" | "activity">("overview");
+  const [purokModalTab, setPurokModalTab] = useState<"overview" | "children" | "programs" | "home-visits" | "assessments" | "analytics" | "activity">("overview");
 
   // Defer useSearchParams to useEffect to avoid hydration mismatch
   useEffect(() => {
