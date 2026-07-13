@@ -1008,6 +1008,7 @@ export function MapView({
   heatmapColorMode = "red-yellow-green",
   heatmapOn: externalHeatmapOn,
   setHeatmapOn: externalSetHeatmapOn,
+  onTileLayerChange,
 }: {
   showHotspots?: boolean;
   showProgramCoverage?: boolean;
@@ -1018,10 +1019,16 @@ export function MapView({
   heatmapColorMode?: HeatmapColorMode;
   heatmapOn?: boolean;
   setHeatmapOn?: (value: boolean) => void;
+  onTileLayerChange?: (layerName: string) => void;
 }) {
   const { user } = useAuthStore();
   const [tileKey, setTileKey] = useState<TileLayerKey>("Default");
   const tile = TILE_LAYERS[tileKey];
+  
+  // Notify parent when tile layer changes
+  useEffect(() => {
+    onTileLayerChange?.(tileKey);
+  }, [tileKey, onTileLayerChange]);
   const [internalHeatmapOn, setInternalHeatmapOn] = useState(false);
   const heatmapOn = externalHeatmapOn !== undefined ? externalHeatmapOn : internalHeatmapOn;
   const setHeatmapOn = externalSetHeatmapOn || setInternalHeatmapOn;
@@ -1250,7 +1257,11 @@ export function MapView({
           style={{ height: "100%", width: "100%", display: "block" }}
         >
           <MapCenterController center={mapCenter} zoom={mapZoom} />
-          <TileLayer key={tileKey} attribution={tile.attribution} url={tile.url} />
+          
+          {/* Show tile layer only if NOT in Heatmap view mode */}
+          {tileKey !== "Heatmap" && (
+            <TileLayer key={tileKey} attribution={tile.attribution} url={tile.url} />
+          )}
           
           {/* Street labels overlay for Satellite and Terrain views */}
           {(tileKey === "Satellite" || tileKey === "Terrain") && (
@@ -1259,6 +1270,22 @@ export function MapView({
               attribution={STREET_LABELS_OVERLAY.attribution}
               zIndex={1000}
             />
+          )}
+          
+          {/* For Heatmap tile layer mode, show light background with labels */}
+          {tileKey === "Heatmap" && (
+            <>
+              <TileLayer 
+                url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+                attribution="&copy; OpenStreetMap contributors &copy; CARTO"
+                zIndex={100}
+              />
+              <TileLayer
+                url={STREET_LABELS_OVERLAY.url}
+                attribution={STREET_LABELS_OVERLAY.attribution}
+                zIndex={1000}
+              />
+            </>
           )}
 
           {/* Barangay boundaries (render first, below puroks) */}
@@ -1308,8 +1335,8 @@ export function MapView({
             </Marker>
           ))}
 
-          {/* IDW heatmap overlay — only when toggle is ON AND showHotspots is true */}
-          {heatmapOn && showHotspots && barangayList.length > 0 && (
+          {/* IDW heatmap overlay — show when: toggle is ON AND showHotspots is true, OR when Heatmap tile layer is selected */}
+          {((heatmapOn && showHotspots) || tileKey === "Heatmap") && barangayList.length > 0 && (
             <IDWCanvasLayer data={barangayList} showLabels={showHotspots} colorMode={heatmapColorMode} />
           )}
 
@@ -1325,21 +1352,23 @@ export function MapView({
         </MapContainer>
       </div>
 
-      {/* ── Heatmap toggle button (inside map panel) ── */}
-      <button
-        onClick={() => setHeatmapOn(!heatmapOn)}
-        className={`absolute bottom-4 left-4 z-[999] flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold border shadow-lg transition-all ${
-          heatmapOn
-            ? "bg-red-600 text-white border-red-500 hover:bg-red-700"
-            : "bg-white/95 text-slate-700 border-slate-200 hover:bg-slate-50"
-        }`}
-      >
-        <span className={`h-2 w-2 rounded-full ${heatmapOn ? "bg-white animate-pulse" : "bg-slate-400"}`} />
-        {heatmapOn ? "🔴 Heatmap ON" : "⚫ Heatmap OFF"}
-      </button>
+      {/* ── Heatmap toggle button (inside map panel) — hidden when Heatmap tile is active ── */}
+      {tileKey !== "Heatmap" && (
+        <button
+          onClick={() => setHeatmapOn(!heatmapOn)}
+          className={`absolute bottom-4 left-4 z-[999] flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold border shadow-lg transition-all ${
+            heatmapOn
+              ? "bg-red-600 text-white border-red-500 hover:bg-red-700"
+              : "bg-white/95 text-slate-700 border-slate-200 hover:bg-slate-50"
+          }`}
+        >
+          <span className={`h-2 w-2 rounded-full ${heatmapOn ? "bg-white animate-pulse" : "bg-slate-400"}`} />
+          {heatmapOn ? "🔴 Heatmap ON" : "⚫ Heatmap OFF"}
+        </button>
+      )}
 
       {/* ── Marker legend (bottom-left, above toggle when heatmap off) ── */}
-      {!heatmapOn && (
+      {!heatmapOn && tileKey !== "Heatmap" && (
         <div className="absolute bottom-16 left-4 z-[999] flex flex-col gap-1.5 rounded-lg border border-slate-200 bg-white/95 px-3 py-2.5 text-xs shadow-md backdrop-blur-sm">
           <p className="font-semibold text-slate-700">Nutritional Status</p>
           <span className="flex items-center gap-2 text-slate-600"><span className="h-3 w-3 rounded-full bg-red-600" />Severe Acute Malnutrition</span>
@@ -1348,8 +1377,8 @@ export function MapView({
         </div>
       )}
 
-      {/* ── Heatmap legend (shown only when ON) ── */}
-      {heatmapOn && (
+      {/* ── Heatmap legend (shown only when ON or Heatmap layer selected) ── */}
+      {(heatmapOn || tileKey === "Heatmap") && (
         <div className="absolute bottom-16 left-4 z-[999] flex flex-col gap-1.5 rounded-lg border border-slate-200 bg-white/95 px-3 py-2.5 text-xs shadow-md backdrop-blur-sm max-w-[200px]">
           <p className="font-semibold text-slate-700">Malnutrition Intensity</p>
           {TIERS.map((tier) => (

@@ -14,6 +14,7 @@ interface DynamicMapProps {
   heatmapColorMode?: HeatmapColorMode;
   heatmapOn?: boolean;
   setHeatmapOn?: (value: boolean) => void;
+  onTileLayerChange?: (layerName: string) => void;
 }
 
 // Use the full-featured MapView for both admin and superadmin

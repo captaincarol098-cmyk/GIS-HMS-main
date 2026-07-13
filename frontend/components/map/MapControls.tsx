@@ -18,6 +18,7 @@ interface MapControlsProps {
   heatmapOn?: boolean;
   heatmapColorMode?: HeatmapColorMode;
   setHeatmapColorMode?: (value: HeatmapColorMode) => void;
+  showHeatmapColorSelector?: boolean;
 }
 
 export function MapControls({
@@ -34,6 +35,7 @@ export function MapControls({
   heatmapOn = false,
   heatmapColorMode = "red-yellow-green",
   setHeatmapColorMode,
+  showHeatmapColorSelector = false,
 }: MapControlsProps) {
   const colorModeOptions: { value: HeatmapColorMode; label: string }[] = [
     { value: "red-yellow-green", label: "🔴 Red-Yellow-Green" },
@@ -121,8 +123,8 @@ export function MapControls({
         </label>
       </div>
 
-      {/* Heatmap Color Mode Selector (shown only when heatmap is ON) */}
-      {heatmapOn && (
+      {/* Heatmap Color Mode Selector (shown when heatmap is ON or Heatmap tile layer is active) */}
+      {(heatmapOn || showHeatmapColorSelector) && (
         <div className="mt-3 pt-3 border-t border-slate-200">
           <label className="block text-xs font-semibold text-slate-700 mb-2">
             Heatmap Color Mode

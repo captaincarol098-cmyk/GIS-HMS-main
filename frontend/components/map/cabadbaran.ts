@@ -66,6 +66,10 @@ export const TILE_LAYERS = {
     url: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
     attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
   },
+  Heatmap: {
+    url: "", // Special layer - no static URL
+    attribution: "Malnutrition Heatmap (Real-time)",
+  },
 } as const;
 
 // ─── Street Labels Overlay (for Satellite + Streets hybrid) ──────────────────

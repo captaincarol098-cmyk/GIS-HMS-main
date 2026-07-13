@@ -60,6 +60,7 @@ export default function MapPage() {
   const [showPredictions, setShowPredictions] = useState(false);
   const [heatmapColorMode, setHeatmapColorMode] = useState<"red-yellow-green" | "blue-purple" | "fire" | "ocean" | "cool">("red-yellow-green");
   const [heatmapOn, setHeatmapOn] = useState(false);
+  const [currentTileLayer, setCurrentTileLayer] = useState<string>("Default");
 
   return (
     <div className="flex flex-col gap-4" style={{ height: "calc(100vh - 72px)" }}>
@@ -83,6 +84,7 @@ export default function MapPage() {
             heatmapColorMode={heatmapColorMode}
             heatmapOn={heatmapOn}
             setHeatmapOn={setHeatmapOn}
+            onTileLayerChange={setCurrentTileLayer}
           />
         </section>
 
@@ -102,6 +104,7 @@ export default function MapPage() {
             heatmapOn={heatmapOn}
             heatmapColorMode={heatmapColorMode}
             setHeatmapColorMode={setHeatmapColorMode}
+            showHeatmapColorSelector={currentTileLayer === "Heatmap"}
           />
           <MapSidebar />
         </div>
