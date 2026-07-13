@@ -806,12 +806,14 @@ function BarangayGeoJSON({
   onHover,
   setSelectedPurokId,
   setShowPurokModal,
+  showOnlyOutlines = false,
 }: { 
   data: any; 
   user: any;
   onHover: (feature: any | null, position: { x: number; y: number } | null) => void;
   setSelectedPurokId: (id: string | null) => void;
   setShowPurokModal: (show: boolean) => void;
+  showOnlyOutlines?: boolean;
 }) {
   const router = useRouter();
   const map = useMap();
@@ -839,7 +841,28 @@ function BarangayGeoJSON({
       data={data}
       interactive={true}
       style={(feature) => {
-        // Different styles for barangays vs puroks
+        // When showing only outlines (Heatmap mode), show clear visible lines
+        if (showOnlyOutlines) {
+          if (feature?.properties?.featureType === "purok") {
+            return {
+              color: "#000000",      // Black border for puroks in heatmap mode
+              fillColor: "transparent",
+              fillOpacity: 0,
+              weight: 2,
+              opacity: 0.7,
+            };
+          }
+          // Barangay borders in heatmap mode
+          return {
+            color: "#1a1a1a",      // Dark border
+            fillColor: "transparent",
+            fillOpacity: 0,
+            weight: 2.5,
+            opacity: 0.6,
+          };
+        }
+        
+        // Different styles for barangays vs puroks (normal mode)
         if (feature?.properties?.featureType === "purok") {
           return {
             color: "#f97316",      // Orange border for puroks
@@ -853,7 +876,11 @@ function BarangayGeoJSON({
         }
         // Barangay style - invisible boundary
         return {
-          ...barangayStyle,
+          color: "#d1d5db",
+          fillColor: "#f3f4f6",
+          fillOpacity: 0.1,
+          weight: 1,
+          opacity: 0.3,
           // Barangays stay below puroks
           pane: 'tilePane',
         };
@@ -1290,6 +1317,7 @@ export function MapView({
               onHover={handleHover}
               setSelectedPurokId={setSelectedPurokId}
               setShowPurokModal={setShowPurokModal}
+              showOnlyOutlines={tileKey === "Heatmap"}
             />
           )}
           
@@ -1301,6 +1329,7 @@ export function MapView({
               onHover={handleHover}
               setSelectedPurokId={setSelectedPurokId}
               setShowPurokModal={setShowPurokModal}
+              showOnlyOutlines={tileKey === "Heatmap"}
             />
           )}
 
