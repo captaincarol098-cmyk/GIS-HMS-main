@@ -223,6 +223,9 @@ class User(Base, TimestampMixin):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     account_status: Mapped[AccountStatus] = mapped_column(Enum(AccountStatus), default=AccountStatus.active)
     last_login: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    failed_login_attempts: Mapped[int] = mapped_column(Integer, default=0)
+    last_failed_login: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    account_locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     barangay = relationship("Barangay")
 
 
@@ -628,3 +631,30 @@ class CaseActionPlan(Base, TimestampMixin):
     case = relationship("MalnutritionCase", back_populates="action_plans")
     creator = relationship("User", foreign_keys=[created_by])
     reviewer = relationship("User", foreign_keys=[reviewed_by])
+
+
+class SecurityAlertType(str, enum.Enum):
+    failed_login = "failed_login"
+    account_locked = "account_locked"
+    suspicious_activity = "suspicious_activity"
+    permission_denied = "permission_denied"
+    data_access_anomaly = "data_access_anomaly"
+
+
+class SecurityAlert(Base, TimestampMixin):
+    """Track suspicious security events for super admin monitoring"""
+    __tablename__ = "security_alerts"
+    id = uuid_pk()
+    alert_type: Mapped[SecurityAlertType] = mapped_column(Enum(SecurityAlertType), index=True)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    username: Mapped[str] = mapped_column(String(80), nullable=True)  # Username for tracking even if user doesn't exist
+    ip_address: Mapped[str] = mapped_column(String(45), nullable=True)  # Support IPv6
+    failed_attempts: Mapped[int] = mapped_column(Integer, default=0)
+    description: Mapped[str] = mapped_column(Text)
+    details: Mapped[dict] = mapped_column(JSON, nullable=True)  # Additional context as JSON
+    severity: Mapped[Severity] = mapped_column(Enum(Severity), default=Severity.medium)
+    is_resolved: Mapped[bool] = mapped_column(Boolean, default=False)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    resolved_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    user = relationship("User", foreign_keys=[user_id], backref="security_alerts")
+    resolver = relationship("User", foreign_keys=[resolved_by])

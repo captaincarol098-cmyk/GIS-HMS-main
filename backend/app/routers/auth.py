@@ -12,6 +12,11 @@ from ..models import Barangay, User, ActivityLog
 from ..models.entities import ActivityLogType
 from ..schemas.common import LoginRequest, TokenResponse, UserRead
 from ..utils.security import create_access_token, create_refresh_token, decode_token, verify_password
+from ..services.security_service import (
+    record_failed_login,
+    check_account_locked,
+    reset_failed_login_attempts,
+)
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -22,17 +27,54 @@ def user_payload(user: User, barangay_name: str | None = None) -> dict:
 
 @router.post("/login", response_model=TokenResponse)
 async def login(body: LoginRequest, request: Request, db: AsyncSession = Depends(get_db)):
+    ip_address = request.client.host if request.client else "unknown"
+    
+    # Find user
     user = await db.scalar(select(User).where(User.username == body.username))
+    
+    # Check if account is locked
+    if user:
+        is_locked, lock_message = await check_account_locked(db, user)
+        if is_locked:
+            raise HTTPException(status_code=429, detail=lock_message)
+    
+    # Verify password and user active status
     if not user or not verify_password(body.password, user.password_hash) or not user.is_active:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-    extra = {"role": user.role.value, "barangay_id": str(user.barangay_id) if user.barangay_id else None}
-    brgy = await db.get(Barangay, user.barangay_id) if user.barangay_id else None
+        # Record failed login
+        _, message = await record_failed_login(
+            db=db,
+            username=body.username,
+            ip_address=ip_address,
+            user_id=user.id if user else None,
+        )
+        raise HTTPException(status_code=401, detail=message)
+    
+    # Reset failed login attempts on successful login
+    await reset_failed_login_attempts(db, user)
+    
+    # Update last login and create activity log
     user.last_login = datetime.now(timezone.utc)
-    ip = request.client.host if request.client else "unknown"
-    log = ActivityLog(user_id=user.id, barangay_id=user.barangay_id, action_type=ActivityLogType.auth, action="login", details={"ip_address": ip, "username": user.username}, ip_address=ip)
+    log = ActivityLog(
+        user_id=user.id,
+        barangay_id=user.barangay_id,
+        action_type=ActivityLogType.auth,
+        action="login",
+        details={"ip_address": ip_address, "username": user.username},
+        ip_address=ip_address
+    )
+    db.add(user)
     db.add(log)
     await db.commit()
-    return TokenResponse(access_token=create_access_token(str(user.id), extra), refresh_token=create_refresh_token(str(user.id), extra), user=user_payload(user, brgy.name if brgy else None))
+    
+    # Build response
+    extra = {"role": user.role.value, "barangay_id": str(user.barangay_id) if user.barangay_id else None}
+    brgy = await db.get(Barangay, user.barangay_id) if user.barangay_id else None
+    
+    return TokenResponse(
+        access_token=create_access_token(str(user.id), extra),
+        refresh_token=create_refresh_token(str(user.id), extra),
+        user=user_payload(user, brgy.name if brgy else None)
+    )
 
 
 @router.post("/refresh")

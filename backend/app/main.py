@@ -12,7 +12,7 @@ from .services.websocket import manager
 from .models import User
 from .routers import alerts, auth, barangays, children, dashboard, decisions, households, imports, logs, maps, measurements, referrals, reports, users, nutrition_programs
 from .routers import realtime, home_visits, messages, calendar, program_activities, accomplishments, purok_monitoring, settings as settings_router, system_notifications
-from .routers import opt_plus, tam, operation_timbang, cases
+from .routers import opt_plus, tam, operation_timbang, cases, security
 from sqlalchemy.ext.asyncio import AsyncSession
 
 # Configure logging
@@ -97,5 +97,5 @@ async def websocket_stats(user: User = Depends(get_current_user)):
     return manager.get_stats()
 
 
-for router in [auth.router, users.router, barangays.router, children.router, measurements.router, dashboard.router, maps.router, alerts.router, referrals.router, reports.router, imports.router, logs.router, decisions.router, households.router, nutrition_programs.router, realtime.router, home_visits.router, messages.router, calendar.router, program_activities.router, accomplishments.router, purok_monitoring.router, settings_router.router, system_notifications.router, opt_plus.router, tam.router, operation_timbang.router, cases.router]:
+for router in [auth.router, users.router, barangays.router, children.router, measurements.router, dashboard.router, maps.router, alerts.router, referrals.router, reports.router, imports.router, logs.router, decisions.router, households.router, nutrition_programs.router, realtime.router, home_visits.router, messages.router, calendar.router, program_activities.router, accomplishments.router, purok_monitoring.router, settings_router.router, system_notifications.router, opt_plus.router, tam.router, operation_timbang.router, cases.router, security.router]:
     app.include_router(router)
