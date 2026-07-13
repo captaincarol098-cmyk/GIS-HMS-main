@@ -58,6 +58,8 @@ export default function MapPage() {
   const [showHomeVisits, setShowHomeVisits] = useState(false);
   const [showFacilities, setShowFacilities] = useState(true);
   const [showPredictions, setShowPredictions] = useState(false);
+  const [heatmapColorMode, setHeatmapColorMode] = useState<"red-yellow-green" | "blue-purple" | "fire" | "ocean" | "cool">("red-yellow-green");
+  const [heatmapOn, setHeatmapOn] = useState(false);
 
   return (
     <div className="flex flex-col gap-4" style={{ height: "calc(100vh - 72px)" }}>
@@ -78,6 +80,9 @@ export default function MapPage() {
             showFacilities={showFacilities}
             showPredictions={showPredictions}
             focusBarangay={barangayParam}
+            heatmapColorMode={heatmapColorMode}
+            heatmapOn={heatmapOn}
+            setHeatmapOn={setHeatmapOn}
           />
         </section>
 
@@ -94,6 +99,9 @@ export default function MapPage() {
             setShowFacilities={setShowFacilities}
             showPredictions={showPredictions}
             setShowPredictions={setShowPredictions}
+            heatmapOn={heatmapOn}
+            heatmapColorMode={heatmapColorMode}
+            setHeatmapColorMode={setHeatmapColorMode}
           />
           <MapSidebar />
         </div>

@@ -135,14 +135,62 @@ const barangayStyle: L.PathOptions = {
 };
 
 // ─── Heatmap Legend tiers ─────────────────────────────────────────────────────
-const TIERS = [
-  { label: "Low",           range: "0-4 cases",   min: 0,  max: 4,        weight: 0.06, color: "#4ade80", labelColor: "#16a34a" },
-  { label: "Low-Moderate",  range: "5-9 cases",   min: 5,  max: 9,        weight: 0.25, color: "#fde047", labelColor: "#ca8a04" },
-  { label: "Moderate",      range: "10-14 cases", min: 10, max: 14,       weight: 0.44, color: "#fdba74", labelColor: "#ea580c" },
-  { label: "Moderate-High", range: "15-19 cases", min: 15, max: 19,       weight: 0.62, color: "#fb923c", labelColor: "#c2410c" },
-  { label: "High",          range: "20-24 cases", min: 20, max: 24,       weight: 0.80, color: "#f87171", labelColor: "#b91c1c" },
-  { label: "Very High",     range: "25+ cases",   min: 25, max: Infinity, weight: 1.00, color: "#dc2626", labelColor: "#991b1b" },
-];
+type HeatmapColorMode = "red-yellow-green" | "blue-purple" | "fire" | "ocean" | "cool";
+
+type TierDefinition = {
+  label: string;
+  range: string;
+  min: number;
+  max: number;
+  weight: number;
+  color: string;
+  labelColor: string;
+};
+
+const COLOR_PALETTES: Record<HeatmapColorMode, TierDefinition[]> = {
+  "red-yellow-green": [
+    { label: "Low",           range: "0-4 cases",   min: 0,  max: 4,        weight: 0.06, color: "#4ade80", labelColor: "#16a34a" },
+    { label: "Low-Moderate",  range: "5-9 cases",   min: 5,  max: 9,        weight: 0.25, color: "#fde047", labelColor: "#ca8a04" },
+    { label: "Moderate",      range: "10-14 cases", min: 10, max: 14,       weight: 0.44, color: "#fdba74", labelColor: "#ea580c" },
+    { label: "Moderate-High", range: "15-19 cases", min: 15, max: 19,       weight: 0.62, color: "#fb923c", labelColor: "#c2410c" },
+    { label: "High",          range: "20-24 cases", min: 20, max: 24,       weight: 0.80, color: "#f87171", labelColor: "#b91c1c" },
+    { label: "Very High",     range: "25+ cases",   min: 25, max: Infinity, weight: 1.00, color: "#dc2626", labelColor: "#991b1b" },
+  ],
+  "blue-purple": [
+    { label: "Low",           range: "0-4 cases",   min: 0,  max: 4,        weight: 0.06, color: "#60a5fa", labelColor: "#1e40af" },
+    { label: "Low-Moderate",  range: "5-9 cases",   min: 5,  max: 9,        weight: 0.25, color: "#7c3aed", labelColor: "#5b21b6" },
+    { label: "Moderate",      range: "10-14 cases", min: 10, max: 14,       weight: 0.44, color: "#a855f7", labelColor: "#6b21a8" },
+    { label: "Moderate-High", range: "15-19 cases", min: 15, max: 19,       weight: 0.62, color: "#d946ef", labelColor: "#831843" },
+    { label: "High",          range: "20-24 cases", min: 20, max: 24,       weight: 0.80, color: "#ec4899", labelColor: "#831843" },
+    { label: "Very High",     range: "25+ cases",   min: 25, max: Infinity, weight: 1.00, color: "#be123c", labelColor: "#800726" },
+  ],
+  "fire": [
+    { label: "Low",           range: "0-4 cases",   min: 0,  max: 4,        weight: 0.06, color: "#fef3c7", labelColor: "#92400e" },
+    { label: "Low-Moderate",  range: "5-9 cases",   min: 5,  max: 9,        weight: 0.25, color: "#fcd34d", labelColor: "#b45309" },
+    { label: "Moderate",      range: "10-14 cases", min: 10, max: 14,       weight: 0.44, color: "#fbbf24", labelColor: "#d97706" },
+    { label: "Moderate-High", range: "15-19 cases", min: 15, max: 19,       weight: 0.62, color: "#f59e0b", labelColor: "#d97706" },
+    { label: "High",          range: "20-24 cases", min: 20, max: 24,       weight: 0.80, color: "#ea580c", labelColor: "#7c2d12" },
+    { label: "Very High",     range: "25+ cases",   min: 25, max: Infinity, weight: 1.00, color: "#7c2d12", labelColor: "#431407" },
+  ],
+  "ocean": [
+    { label: "Low",           range: "0-4 cases",   min: 0,  max: 4,        weight: 0.06, color: "#cffafe", labelColor: "#164e63" },
+    { label: "Low-Moderate",  range: "5-9 cases",   min: 5,  max: 9,        weight: 0.25, color: "#06b6d4", labelColor: "#164e63" },
+    { label: "Moderate",      range: "10-14 cases", min: 10, max: 14,       weight: 0.44, color: "#0891b2", labelColor: "#164e63" },
+    { label: "Moderate-High", range: "15-19 cases", min: 15, max: 19,       weight: 0.62, color: "#0e7490", labelColor: "#164e63" },
+    { label: "High",          range: "20-24 cases", min: 20, max: 24,       weight: 0.80, color: "#155e75", labelColor: "#ecf0f1" },
+    { label: "Very High",     range: "25+ cases",   min: 25, max: Infinity, weight: 1.00, color: "#082f49", labelColor: "#ecf0f1" },
+  ],
+  "cool": [
+    { label: "Low",           range: "0-4 cases",   min: 0,  max: 4,        weight: 0.06, color: "#a7f3d0", labelColor: "#065f46" },
+    { label: "Low-Moderate",  range: "5-9 cases",   min: 5,  max: 9,        weight: 0.25, color: "#6ee7b7", labelColor: "#047857" },
+    { label: "Moderate",      range: "10-14 cases", min: 10, max: 14,       weight: 0.44, color: "#34d399", labelColor: "#047857" },
+    { label: "Moderate-High", range: "15-19 cases", min: 15, max: 19,       weight: 0.62, color: "#10b981", labelColor: "#065f46" },
+    { label: "High",          range: "20-24 cases", min: 20, max: 24,       weight: 0.80, color: "#059669", labelColor: "#ecf0f1" },
+    { label: "Very High",     range: "25+ cases",   min: 25, max: Infinity, weight: 1.00, color: "#047857", labelColor: "#ecf0f1" },
+  ],
+};
+
+let TIERS = COLOR_PALETTES["red-yellow-green"];
 
 function getWeight(count: number): number {
   return TIERS.find((t) => count >= t.min && count <= t.max)?.weight ?? 0.06;
@@ -333,12 +381,15 @@ function buildPopupHtml(props: BarangaySeverity) {
 const GEO = { south: 9.07, north: 9.20, west: 125.51, east: 125.65 } as const;
 
 // ─── IDW Canvas heatmap layer (malnutrition intensity) ───────────────────────
-function IDWCanvasLayer({ data, showLabels = true }: { data: BarangaySeverity[]; showLabels?: boolean }) {
+function IDWCanvasLayer({ data, showLabels = true, colorMode = "red-yellow-green" }: { data: BarangaySeverity[]; showLabels?: boolean; colorMode?: HeatmapColorMode }) {
   const map = useMap();
   const overlayRef = useRef<L.ImageOverlay | null>(null);
   const groupRef   = useRef<L.LayerGroup | null>(null);
 
   useEffect(() => {
+    // Update TIERS based on selected color mode
+    TIERS = COLOR_PALETTES[colorMode];
+
     if (!data || data.length === 0) return;
 
     const pts = data
@@ -426,7 +477,7 @@ function IDWCanvasLayer({ data, showLabels = true }: { data: BarangaySeverity[];
       if (groupRef.current)   map.removeLayer(groupRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, showLabels]);
+  }, [data, showLabels, colorMode]);
 
   return null;
 }
@@ -954,6 +1005,9 @@ export function MapView({
   showFacilities = true,
   showPredictions = false,
   focusBarangay = null,
+  heatmapColorMode = "red-yellow-green",
+  heatmapOn: externalHeatmapOn,
+  setHeatmapOn: externalSetHeatmapOn,
 }: {
   showHotspots?: boolean;
   showProgramCoverage?: boolean;
@@ -961,11 +1015,16 @@ export function MapView({
   showFacilities?: boolean;
   showPredictions?: boolean;
   focusBarangay?: string | null;
+  heatmapColorMode?: HeatmapColorMode;
+  heatmapOn?: boolean;
+  setHeatmapOn?: (value: boolean) => void;
 }) {
   const { user } = useAuthStore();
   const [tileKey, setTileKey] = useState<TileLayerKey>("Default");
   const tile = TILE_LAYERS[tileKey];
-  const [heatmapOn, setHeatmapOn] = useState(false);
+  const [internalHeatmapOn, setInternalHeatmapOn] = useState(false);
+  const heatmapOn = externalHeatmapOn !== undefined ? externalHeatmapOn : internalHeatmapOn;
+  const setHeatmapOn = externalSetHeatmapOn || setInternalHeatmapOn;
   const containerRef = useRef<HTMLDivElement>(null);
   
   // Hover overlay state
@@ -1251,7 +1310,7 @@ export function MapView({
 
           {/* IDW heatmap overlay — only when toggle is ON AND showHotspots is true */}
           {heatmapOn && showHotspots && barangayList.length > 0 && (
-            <IDWCanvasLayer data={barangayList} showLabels={showHotspots} />
+            <IDWCanvasLayer data={barangayList} showLabels={showHotspots} colorMode={heatmapColorMode} />
           )}
 
           {/* Layer icons overlay on barangays */}

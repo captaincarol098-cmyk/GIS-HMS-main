@@ -2,6 +2,8 @@
 
 import dynamic from "next/dynamic";
 
+type HeatmapColorMode = "red-yellow-green" | "blue-purple" | "fire" | "ocean" | "cool";
+
 interface DynamicMapProps {
   showHotspots: boolean;
   showProgramCoverage: boolean;
@@ -9,6 +11,9 @@ interface DynamicMapProps {
   showFacilities: boolean;
   showPredictions: boolean;
   focusBarangay?: string | null;
+  heatmapColorMode?: HeatmapColorMode;
+  heatmapOn?: boolean;
+  setHeatmapOn?: (value: boolean) => void;
 }
 
 // Use the full-featured MapView for both admin and superadmin
