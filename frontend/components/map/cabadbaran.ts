@@ -70,10 +70,6 @@ export const TILE_LAYERS = {
     url: "", // Special layer - no static URL
     attribution: "Malnutrition Heatmap (Real-time)",
   },
-  Choropleth: {
-    url: "", // Special layer - shows choropleth overlay
-    attribution: "Malnutrition Prevalence Map",
-  },
 } as const;
 
 // ─── Street Labels Overlay (for Satellite + Streets hybrid) ──────────────────
