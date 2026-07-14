@@ -14,6 +14,8 @@ interface DynamicMapProps {
   heatmapColorMode?: HeatmapColorMode;
   heatmapOn?: boolean;
   setHeatmapOn?: (value: boolean) => void;
+  choroplethOn?: boolean;
+  setChoroplethOn?: (value: boolean) => void;
   onTileLayerChange?: (layerName: string) => void;
 }
 

@@ -60,6 +60,7 @@ export default function MapPage() {
   const [showPredictions, setShowPredictions] = useState(false);
   const [heatmapColorMode, setHeatmapColorMode] = useState<"red-yellow-green" | "blue-purple" | "fire" | "ocean" | "cool">("red-yellow-green");
   const [heatmapOn, setHeatmapOn] = useState(false);
+  const [choroplethOn, setChoroplethOn] = useState(false);
   const [currentTileLayer, setCurrentTileLayer] = useState<string>("Default");
 
   return (
@@ -84,6 +85,8 @@ export default function MapPage() {
             heatmapColorMode={heatmapColorMode}
             heatmapOn={heatmapOn}
             setHeatmapOn={setHeatmapOn}
+            choroplethOn={choroplethOn}
+            setChoroplethOn={setChoroplethOn}
             onTileLayerChange={setCurrentTileLayer}
           />
         </section>
@@ -102,6 +105,8 @@ export default function MapPage() {
             showPredictions={showPredictions}
             setShowPredictions={setShowPredictions}
             heatmapOn={heatmapOn}
+            choroplethOn={choroplethOn}
+            setChoroplethOn={setChoroplethOn}
             heatmapColorMode={heatmapColorMode}
             setHeatmapColorMode={setHeatmapColorMode}
             showHeatmapColorSelector={currentTileLayer === "Heatmap"}

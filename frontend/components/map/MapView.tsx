@@ -126,6 +126,74 @@ function pinIcon(status: string | undefined) {
 // ─── Invisible barangay boundary style ───────────────────────────────────────
 // NOTE: Must have non-zero opacity for Leaflet to fire mouse events!
 // Using low opacity (0.05) to maintain interactivity while staying nearly invisible
+// ─── Choropleth Color Function - Get color based on malnutrition density ─────
+function getChoroplethColor(malnutritionCount: number, totalChildren: number): string {
+  // Calculate prevalence rate (percentage)
+  const prevalenceRate = totalChildren > 0 ? (malnutritionCount / totalChildren) * 100 : 0;
+  
+  // Color scheme based on prevalence rate (matching your requirements)
+  if (prevalenceRate > 20) return '#800026';      // Very High (>20%)
+  if (prevalenceRate > 15) return '#BD0026';      // High (15-20%)
+  if (prevalenceRate > 10) return '#E31A1C';      // Moderate-High (10-15%)
+  if (prevalenceRate > 7)  return '#FC4E2A';      // Moderate (7-10%)
+  if (prevalenceRate > 4)  return '#FD8D3C';      // Low-Moderate (4-7%)
+  if (prevalenceRate > 2)  return '#FEB24C';      // Low (2-4%)
+  if (prevalenceRate > 0)  return '#FED976';      // Very Low (0-2%)
+  return '#FFEDA0';                                // No cases
+}
+
+// ─── Get Choropleth Style for Barangay ───────────────────────────────────────
+function getChoroplethStyle(
+  feature: any,
+  barangaySeverities: BarangaySeverity[],
+  showOnlyOutlines: boolean = false
+): L.PathOptions {
+  const barangayName = feature?.properties?.name;
+  const severity = barangaySeverities.find(b => b.name === barangayName);
+  
+  // When showing only outlines (default map view)
+  if (showOnlyOutlines) {
+    if (feature?.properties?.featureType === "purok") {
+      return {
+        color: "#000000",
+        fillColor: "transparent",
+        fillOpacity: 0,
+        weight: 2,
+        opacity: 0.7,
+      };
+    }
+    return {
+      color: "#1a1a1a",
+      fillColor: "transparent",
+      fillOpacity: 0,
+      weight: 2.5,
+      opacity: 0.6,
+    };
+  }
+  
+  // Choropleth mode - color based on malnutrition data
+  if (severity) {
+    const fillColor = getChoroplethColor(severity.malnutrition_count, severity.total_children);
+    
+    return {
+      fillColor: fillColor,
+      fillOpacity: 0.7,              // 70% opacity so roads remain visible
+      color: '#333333',               // Dark gray border
+      weight: 1.5,                    // Border thickness
+      opacity: 1,                     // Full border opacity
+    };
+  }
+  
+  // Default style for areas without data
+  return {
+    fillColor: '#f0f0f0',
+    fillOpacity: 0.5,
+    color: '#999999',
+    weight: 1,
+    opacity: 0.5,
+  };
+}
+
 const barangayStyle: L.PathOptions = {
   color: "#10b981",
   fillColor: "#10b981",
@@ -807,6 +875,8 @@ function BarangayGeoJSON({
   setSelectedPurokId,
   setShowPurokModal,
   showOnlyOutlines = false,
+  enableChoropleth = false,
+  barangaySeverities = [],
 }: { 
   data: any; 
   user: any;
@@ -814,6 +884,8 @@ function BarangayGeoJSON({
   setSelectedPurokId: (id: string | null) => void;
   setShowPurokModal: (show: boolean) => void;
   showOnlyOutlines?: boolean;
+  enableChoropleth?: boolean;
+  barangaySeverities?: BarangaySeverity[];
 }) {
   const router = useRouter();
   const map = useMap();
@@ -823,6 +895,8 @@ function BarangayGeoJSON({
     console.log('[BarangayGeoJSON] Component mounted/updated');
     console.log('[BarangayGeoJSON] Data features count:', data?.features?.length || 0);
     console.log('[BarangayGeoJSON] User role:', user?.role);
+    console.log('[BarangayGeoJSON] Choropleth enabled:', enableChoropleth);
+    console.log('[BarangayGeoJSON] Severities count:', barangaySeverities.length);
     
     // Log all features and their types
     if (data?.features) {
@@ -833,14 +907,19 @@ function BarangayGeoJSON({
       }));
       console.log('[BarangayGeoJSON] All features:', featureTypes);
     }
-  }, [data, user]);
+  }, [data, user, enableChoropleth, barangaySeverities]);
 
   return (
     <GeoJSON
-      key={JSON.stringify(data)}
+      key={`${JSON.stringify(data)}-${enableChoropleth}`}
       data={data}
       interactive={true}
       style={(feature) => {
+        // If choropleth is enabled, use data-driven colors
+        if (enableChoropleth && feature?.properties?.featureType !== "purok") {
+          return getChoroplethStyle(feature, barangaySeverities, false);
+        }
+        
         // When showing only outlines (Heatmap mode), show clear visible lines
         if (showOnlyOutlines) {
           if (feature?.properties?.featureType === "purok") {
@@ -891,7 +970,20 @@ function BarangayGeoJSON({
           // Show permanent labels for both barangays and puroks for navigation
           if (feature.properties?.name) {
             const isBarangay = feature.properties?.featureType !== "purok";
-            layer.bindTooltip(feature.properties.name, {
+            
+            // In choropleth mode, add prevalence info to tooltip
+            let labelText = feature.properties.name;
+            if (enableChoropleth && isBarangay) {
+              const severity = barangaySeverities.find(b => b.name === feature.properties.name);
+              if (severity) {
+                const prevalenceRate = severity.total_children > 0 
+                  ? ((severity.malnutrition_count / severity.total_children) * 100).toFixed(1)
+                  : '0.0';
+                labelText = `${feature.properties.name}\n${prevalenceRate}% prevalence`;
+              }
+            }
+            
+            layer.bindTooltip(labelText, {
               permanent: true,
               direction: "center",
               className: isBarangay ? "barangay-label" : "purok-label",
@@ -1035,6 +1127,8 @@ export function MapView({
   heatmapColorMode = "red-yellow-green",
   heatmapOn: externalHeatmapOn,
   setHeatmapOn: externalSetHeatmapOn,
+  choroplethOn: externalChoroplethOn,
+  setChoroplethOn: externalSetChoroplethOn,
   onTileLayerChange,
 }: {
   showHotspots?: boolean;
@@ -1046,6 +1140,8 @@ export function MapView({
   heatmapColorMode?: HeatmapColorMode;
   heatmapOn?: boolean;
   setHeatmapOn?: (value: boolean) => void;
+  choroplethOn?: boolean;
+  setChoroplethOn?: (value: boolean) => void;
   onTileLayerChange?: (layerName: string) => void;
 }) {
   const { user } = useAuthStore();
@@ -1057,8 +1153,11 @@ export function MapView({
     onTileLayerChange?.(tileKey);
   }, [tileKey, onTileLayerChange]);
   const [internalHeatmapOn, setInternalHeatmapOn] = useState(false);
+  const [internalChoroplethOn, setInternalChoroplethOn] = useState(false);
   const heatmapOn = externalHeatmapOn !== undefined ? externalHeatmapOn : internalHeatmapOn;
   const setHeatmapOn = externalSetHeatmapOn || setInternalHeatmapOn;
+  const choroplethOn = externalChoroplethOn !== undefined ? externalChoroplethOn : internalChoroplethOn;
+  const setChoroplethOn = externalSetChoroplethOn || setInternalChoroplethOn;
   const containerRef = useRef<HTMLDivElement>(null);
   
   // Hover overlay state
@@ -1317,7 +1416,9 @@ export function MapView({
               onHover={handleHover}
               setSelectedPurokId={setSelectedPurokId}
               setShowPurokModal={setShowPurokModal}
-              showOnlyOutlines={tileKey === "Heatmap"}
+              showOnlyOutlines={tileKey === "Heatmap" && !choroplethOn}
+              enableChoropleth={choroplethOn}
+              barangaySeverities={barangayList}
             />
           )}
           
@@ -1329,7 +1430,9 @@ export function MapView({
               onHover={handleHover}
               setSelectedPurokId={setSelectedPurokId}
               setShowPurokModal={setShowPurokModal}
-              showOnlyOutlines={tileKey === "Heatmap"}
+              showOnlyOutlines={tileKey === "Heatmap" && !choroplethOn}
+              enableChoropleth={false}
+              barangaySeverities={[]}
             />
           )}
 
@@ -1358,8 +1461,8 @@ export function MapView({
             </Marker>
           ))}
 
-          {/* IDW heatmap overlay — show when: toggle is ON AND showHotspots is true, OR when Heatmap tile layer is selected */}
-          {((heatmapOn && showHotspots) || tileKey === "Heatmap") && barangayList.length > 0 && (
+          {/* IDW heatmap overlay — show when: toggle is ON AND showHotspots is true AND choropleth is OFF, OR when Heatmap tile layer is selected AND choropleth is OFF */}
+          {((heatmapOn && showHotspots) || tileKey === "Heatmap") && !choroplethOn && barangayList.length > 0 && (
             <IDWCanvasLayer 
               data={barangayList} 
               showLabels={tileKey !== "Heatmap"} 
@@ -1405,8 +1508,8 @@ export function MapView({
         </div>
       )}
 
-      {/* ── Heatmap legend (shown only when ON or Heatmap layer selected) ── */}
-      {(heatmapOn || tileKey === "Heatmap") && (
+      {/* ── Heatmap legend (shown only when ON or Heatmap layer selected, but NOT when choropleth is ON) ── */}
+      {(heatmapOn || tileKey === "Heatmap") && !choroplethOn && (
         <div className="absolute bottom-16 left-4 z-[999] flex flex-col gap-1.5 rounded-lg border border-slate-200 bg-white/95 px-3 py-2.5 text-xs shadow-md backdrop-blur-sm max-w-[200px]">
           <p className="font-semibold text-slate-700">Malnutrition Intensity</p>
           {TIERS.map((tier) => (
@@ -1415,6 +1518,45 @@ export function MapView({
               {tier.label} <span className="text-slate-400">({tier.range})</span>
             </span>
           ))}
+        </div>
+      )}
+      
+      {/* ── Choropleth legend (shown only when choropleth is ON) ── */}
+      {choroplethOn && (
+        <div className="absolute bottom-16 left-4 z-[999] flex flex-col gap-1.5 rounded-lg border border-slate-200 bg-white/95 px-3 py-2.5 text-xs shadow-md backdrop-blur-sm max-w-[220px]">
+          <p className="font-semibold text-slate-700">Malnutrition Prevalence</p>
+          <span className="flex items-center gap-2 text-slate-600">
+            <span className="h-3 w-3 rounded-sm shrink-0" style={{ backgroundColor: '#800026' }} />
+            Very High <span className="text-slate-400">(&gt;20%)</span>
+          </span>
+          <span className="flex items-center gap-2 text-slate-600">
+            <span className="h-3 w-3 rounded-sm shrink-0" style={{ backgroundColor: '#BD0026' }} />
+            High <span className="text-slate-400">(15-20%)</span>
+          </span>
+          <span className="flex items-center gap-2 text-slate-600">
+            <span className="h-3 w-3 rounded-sm shrink-0" style={{ backgroundColor: '#E31A1C' }} />
+            Moderate-High <span className="text-slate-400">(10-15%)</span>
+          </span>
+          <span className="flex items-center gap-2 text-slate-600">
+            <span className="h-3 w-3 rounded-sm shrink-0" style={{ backgroundColor: '#FC4E2A' }} />
+            Moderate <span className="text-slate-400">(7-10%)</span>
+          </span>
+          <span className="flex items-center gap-2 text-slate-600">
+            <span className="h-3 w-3 rounded-sm shrink-0" style={{ backgroundColor: '#FD8D3C' }} />
+            Low-Moderate <span className="text-slate-400">(4-7%)</span>
+          </span>
+          <span className="flex items-center gap-2 text-slate-600">
+            <span className="h-3 w-3 rounded-sm shrink-0" style={{ backgroundColor: '#FEB24C' }} />
+            Low <span className="text-slate-400">(2-4%)</span>
+          </span>
+          <span className="flex items-center gap-2 text-slate-600">
+            <span className="h-3 w-3 rounded-sm shrink-0" style={{ backgroundColor: '#FED976' }} />
+            Very Low <span className="text-slate-400">(0-2%)</span>
+          </span>
+          <span className="flex items-center gap-2 text-slate-600">
+            <span className="h-3 w-3 rounded-sm shrink-0" style={{ backgroundColor: '#FFEDA0' }} />
+            No Cases <span className="text-slate-400">(0%)</span>
+          </span>
         </div>
       )}
       

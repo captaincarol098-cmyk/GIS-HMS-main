@@ -16,6 +16,8 @@ interface MapControlsProps {
   showPredictions: boolean;
   setShowPredictions: (value: boolean) => void;
   heatmapOn?: boolean;
+  choroplethOn?: boolean;
+  setChoroplethOn?: (value: boolean) => void;
   heatmapColorMode?: HeatmapColorMode;
   setHeatmapColorMode?: (value: HeatmapColorMode) => void;
   showHeatmapColorSelector?: boolean;
@@ -33,6 +35,8 @@ export function MapControls({
   showPredictions,
   setShowPredictions,
   heatmapOn = false,
+  choroplethOn = false,
+  setChoroplethOn,
   heatmapColorMode = "red-yellow-green",
   setHeatmapColorMode,
   showHeatmapColorSelector = false,
@@ -123,29 +127,48 @@ export function MapControls({
         </label>
       </div>
 
-      {/* Heatmap Color Mode Selector (shown when heatmap is ON or Heatmap tile layer is active) */}
-      {(heatmapOn || showHeatmapColorSelector) && (
-        <div className="mt-3 pt-3 border-t border-slate-200">
-          <label className="block text-xs font-semibold text-slate-700 mb-2">
-            Heatmap Color Mode
+      {/* Heatmap Layer Modes Section */}
+      {(heatmapOn || showHeatmapColorSelector || choroplethOn) && (
+        <div className="mt-3 pt-3 border-t border-slate-200 space-y-3">
+          
+          {/* Choropleth Toggle */}
+          <label className="flex items-center justify-between cursor-pointer group">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-slate-700">🗺️ Choropleth Map</span>
+            </div>
+            <input
+              type="checkbox"
+              checked={choroplethOn}
+              onChange={(e) => setChoroplethOn?.(e.target.checked)}
+              className="rounded text-teal-600 focus:ring-teal-500 h-4 w-4"
+            />
           </label>
-          <div className="space-y-1.5">
-            {colorModeOptions.map((option) => (
-              <label key={option.value} className="flex items-center gap-2 cursor-pointer group">
-                <input
-                  type="radio"
-                  name="heatmap-color-mode"
-                  value={option.value}
-                  checked={heatmapColorMode === option.value}
-                  onChange={(e) => setHeatmapColorMode?.(e.target.value as HeatmapColorMode)}
-                  className="rounded-full text-teal-600 focus:ring-teal-500 h-3.5 w-3.5"
-                />
-                <span className="text-xs font-medium text-slate-700 group-hover:text-slate-900">
-                  {option.label}
-                </span>
+          
+          {/* Heatmap Color Mode Selector (shown when heatmap is ON and choropleth is OFF) */}
+          {(heatmapOn || showHeatmapColorSelector) && !choroplethOn && (
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-2">
+                Heatmap Color Mode
               </label>
-            ))}
-          </div>
+              <div className="space-y-1.5">
+                {colorModeOptions.map((option) => (
+                  <label key={option.value} className="flex items-center gap-2 cursor-pointer group">
+                    <input
+                      type="radio"
+                      name="heatmap-color-mode"
+                      value={option.value}
+                      checked={heatmapColorMode === option.value}
+                      onChange={(e) => setHeatmapColorMode?.(e.target.value as HeatmapColorMode)}
+                      className="rounded-full text-teal-600 focus:ring-teal-500 h-3.5 w-3.5"
+                    />
+                    <span className="text-xs font-medium text-slate-700 group-hover:text-slate-900">
+                      {option.label}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
