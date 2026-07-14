@@ -1,35 +1,32 @@
-"""
-Quick migration script to add new program fields
-Run: python run_migration.py
-"""
 import asyncio
-from sqlalchemy import text
-from app.database import engine
+import asyncpg
+import os
 
 async def run_migration():
-    async with engine.begin() as conn:
-        # Add new columns
-        await conn.execute(text("""
-            ALTER TABLE nutrition_programs 
-            ADD COLUMN IF NOT EXISTS program_type VARCHAR(50) DEFAULT 'Other'
-        """))
+    # Read database connection from environment or use defaults
+    db_url = "postgresql://postgres:11322@localhost:5432/gishms"
+    
+    print(f"Connecting to database...")
+    conn = await asyncpg.connect(db_url)
+    
+    try:
+        # Read the migration file
+        migration_file = "migrations/add_security_tracking.sql"
+        print(f"Reading migration file: {migration_file}")
         
-        await conn.execute(text("""
-            ALTER TABLE nutrition_programs 
-            ADD COLUMN IF NOT EXISTS funding_source VARCHAR(50) DEFAULT 'City Funded Program'
-        """))
+        with open(migration_file, 'r') as f:
+            sql = f.read()
         
-        await conn.execute(text("""
-            ALTER TABLE nutrition_programs 
-            ADD COLUMN IF NOT EXISTS ai_recommended_budget FLOAT
-        """))
+        print("Executing migration...")
+        await conn.execute(sql)
+        print("✓ Migration completed successfully!")
         
-        await conn.execute(text("""
-            ALTER TABLE nutrition_programs 
-            ADD COLUMN IF NOT EXISTS ai_recommendation_notes TEXT
-        """))
-        
-        print("✅ Migration completed successfully!")
+    except Exception as e:
+        print(f"✗ Migration failed: {e}")
+        raise
+    finally:
+        await conn.close()
+        print("Database connection closed")
 
 if __name__ == "__main__":
     asyncio.run(run_migration())
