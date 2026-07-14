@@ -183,3 +183,33 @@ button, input, select, textarea { font: inherit; }
   border: 0 !important;
   box-shadow: none !important;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CHOROPLETH MAP - CSS Blend Mode Styling
+   Uses mix-blend-mode to overlay colors while keeping roads/labels visible
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* When choropleth mode is active, convert OSM tiles to grayscale base */
+.choropleth-mode .leaflet-tile-container img {
+  filter: grayscale(100%) brightness(120%) contrast(100%);
+  transition: filter 0.3s ease;
+}
+
+/* Apply blend mode to choropleth polygons - lets roads/labels show through */
+.choropleth-mode .leaflet-interactive {
+  mix-blend-mode: multiply;
+  fill-opacity: 1.0 !important;
+  /* Solid fill - CSS blend mode handles the transparency effect */
+}
+
+/* Ensure polygon borders remain visible */
+.choropleth-mode .leaflet-interactive[stroke] {
+  stroke-opacity: 1.0 !important;
+  mix-blend-mode: normal;
+  /* Borders use normal blend mode for clarity */
+}
+
+/* Optional: Smooth transition when toggling choropleth */
+.leaflet-interactive {
+  transition: fill-opacity 0.2s ease, mix-blend-mode 0.2s ease;
+}

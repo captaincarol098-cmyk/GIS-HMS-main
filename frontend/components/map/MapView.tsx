@@ -177,10 +177,10 @@ function getChoroplethStyle(
     
     return {
       fillColor: fillColor,
-      fillOpacity: 0.7,              // 70% opacity so roads remain visible
-      color: '#333333',               // Dark gray border
-      weight: 1.5,                    // Border thickness
-      opacity: 1,                     // Full border opacity
+      fillOpacity: 1.0,                // Full opacity - CSS blend mode handles transparency
+      color: '#333333',                // Dark gray border
+      weight: 1.5,                     // Border thickness
+      opacity: 1,                      // Full border opacity
     };
   }
   
@@ -1370,7 +1370,7 @@ export function MapView({
   }, []);
 
   return (
-    <div ref={containerRef} className="relative w-full h-full flex flex-col bg-gray-100">
+    <div ref={containerRef} className={`relative w-full h-full flex flex-col bg-gray-100 ${choroplethOn ? 'choropleth-mode' : ''}`}>
 
       {/* Layer switcher */}
       <LayerSwitcher active={tileKey} onChange={setTileKey} />
