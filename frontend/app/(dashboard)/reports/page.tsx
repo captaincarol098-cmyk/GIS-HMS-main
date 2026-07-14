@@ -306,32 +306,48 @@ export default function ReportsPage() {
   // Download comprehensive report as PDF with proper A4 formatting
   const downloadReportAsPDF = async () => {
     try {
-      // Use browser's print-to-PDF functionality via window.print()
-      const printWindow = window.open('', '_blank');
-      if (!printWindow) {
-        setGenError("❌ Please allow pop-ups to download PDF");
+      setGenSuccess("⏳ Preparing PDF download...");
+      
+      // Get the report element
+      const element = document.getElementById('comprehensive-report-pdf');
+      if (!element) {
+        setGenError("❌ Report content not found. Please make sure you're on the Comprehensive Report tab.");
+        setGenSuccess("");
+        setTimeout(() => setGenError(""), 5000);
         return;
       }
 
-      const element = document.getElementById('comprehensive-report-pdf');
-      if (!element) {
-        setGenError("❌ Report content not found");
-        printWindow.close();
+      // Use browser's print functionality which is most reliable
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) {
+        setGenError("❌ Please allow pop-ups to download PDF. Or use your browser's print function (Ctrl+P).");
+        setGenSuccess("");
+        setTimeout(() => setGenError(""), 5000);
         return;
       }
 
       const htmlContent = element.innerHTML;
+      const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
       
       printWindow.document.write(`
         <!DOCTYPE html>
         <html>
         <head>
           <meta charset="UTF-8">
-          <title>Comprehensive Nutrition Report</title>
+          <title>Comprehensive Nutrition Report - ${today}</title>
           <style>
             @page {
               size: A4;
-              margin: 1in;
+              margin: 0.75in;
+            }
+            @media print {
+              body {
+                margin: 0;
+                padding: 0;
+              }
+              .no-print {
+                display: none !important;
+              }
             }
             * {
               margin: 0;
@@ -339,29 +355,35 @@ export default function ReportsPage() {
               box-sizing: border-box;
             }
             body {
-              font-family: Arial, sans-serif;
-              font-size: 11px;
+              font-family: 'Arial', 'Helvetica', sans-serif;
+              font-size: 10pt;
               line-height: 1.4;
               color: #333;
-            }
-            .print\\:page-break-after {
-              page-break-after: always;
+              background: white;
             }
             h1, h2, h3, h4, h5, h6 {
               page-break-after: avoid;
+              margin-top: 12pt;
+              margin-bottom: 6pt;
             }
+            h1 { font-size: 18pt; }
+            h2 { font-size: 14pt; }
+            h3 { font-size: 12pt; }
             p {
               page-break-inside: avoid;
+              margin-bottom: 6pt;
             }
             table {
               page-break-inside: avoid;
               border-collapse: collapse;
               width: 100%;
+              margin: 8pt 0;
             }
             td, th {
               border: 1px solid #999;
-              padding: 8px;
+              padding: 4pt 6pt;
               text-align: left;
+              font-size: 9pt;
             }
             th {
               background-color: #f0f0f0;
@@ -369,6 +391,17 @@ export default function ReportsPage() {
             }
             img {
               max-width: 100%;
+              page-break-inside: avoid;
+            }
+            .page-break {
+              page-break-after: always;
+            }
+            ul, ol {
+              margin-left: 20pt;
+              margin-bottom: 8pt;
+            }
+            li {
+              margin-bottom: 4pt;
             }
           </style>
         </head>
@@ -380,20 +413,34 @@ export default function ReportsPage() {
       
       printWindow.document.close();
       
+      // Wait for content to load then trigger print
       setTimeout(() => {
+        printWindow.focus();
         printWindow.print();
-      }, 250);
+        
+        // Close the window after printing (optional)
+        // Note: Some browsers keep it open, which is fine
+        setTimeout(() => {
+          try {
+            printWindow.close();
+          } catch (e) {
+            // Ignore close errors
+          }
+        }, 1000);
+      }, 500);
 
-      setGenSuccess("✅ PDF download prepared! Click the print dialog to save as PDF.");
-      setTimeout(() => setGenSuccess(""), 5000);
+      setGenSuccess("✅ PDF download dialog opened! Select 'Save as PDF' in the print dialog.");
+      setTimeout(() => setGenSuccess(""), 7000);
+      
     } catch (error) {
       console.error("Error generating PDF:", error);
-      setGenError("❌ Error generating PDF. Try using your browser's print function.");
+      setGenError("❌ Error generating PDF. Please try using Ctrl+P to print the page as PDF.");
+      setGenSuccess("");
       setTimeout(() => setGenError(""), 5000);
     }
   };
 
-  // Save report to database
+  // Save report to database - will be visible in Saved Reports tab
   async function handleSave() {
     setIsSaving(true);
     setGenError("");
@@ -405,16 +452,17 @@ export default function ReportsPage() {
       // For barangay admin, send their barangay_id; for superadmin, it can be null
       const barangayId = user?.role === "admin" ? user?.barangay_id : null;
       
-      console.log("Attempting to save report...");
+      console.log("=== SAVE REPORT STARTED ===");
       console.log("User role:", user?.role);
       console.log("Barangay ID:", barangayId);
+      console.log("Barangay Name:", user?.barangay_name);
       
       // Ensure comprehensiveReportData is JSON-serializable
       const reportData = JSON.parse(JSON.stringify(comprehensiveReportData));
       console.log("Report data size:", JSON.stringify(reportData).length, "bytes");
       
       const payload = {
-        title: `Comprehensive City Nutrition Monitoring Report - ${formatDate(new Date().toISOString())}`,
+        title: `Comprehensive Nutrition Monitoring Report - ${formatDate(new Date().toISOString())}`,
         report_type: "monthly",
         report_category: "comprehensive",
         period_start: today,
@@ -422,6 +470,13 @@ export default function ReportsPage() {
         barangay_id: barangayId,
         data: reportData,
       };
+      
+      console.log("Payload:", {
+        title: payload.title,
+        report_type: payload.report_type,
+        report_category: payload.report_category,
+        barangay_id: payload.barangay_id
+      });
       
       console.log("Sending POST request to /api/reports/generate");
       
@@ -431,28 +486,34 @@ export default function ReportsPage() {
         maxBodyLength: 100 * 1024 * 1024, // 100MB
       });
       
-      console.log("Response received:", response);
+      console.log("=== SAVE SUCCESSFUL ===");
+      console.log("Response status:", response.status);
+      console.log("Response data:", response.data);
       
       // Store the saved report ID for potential submission
       if (response.data?.id) {
         setSelectedReportId(response.data.id);
+        console.log("Saved report ID:", response.data.id);
       }
       
-      setGenSuccess("✅ Comprehensive report saved successfully!");
-      setTimeout(() => setGenSuccess(""), 5000);
+      setGenSuccess("✅ Report saved successfully! Check 'Saved Reports' tab to view it.");
+      setTimeout(() => {
+        setGenSuccess("");
+        // Auto-switch to saved reports tab
+        setActiveTab("saved");
+      }, 2000);
       
       // Refetch reports list
+      console.log("Invalidating queries with key: reports");
       queryClient.invalidateQueries({ queryKey: ["reports"] });
     } catch (err: any) {
-      console.error("=== ERROR DETAILS ===");
+      console.error("=== SAVE ERROR ===");
       console.error("Full error object:", err);
       console.error("Error code:", err?.code);
       console.error("Error message:", err?.message);
       console.error("Error response:", err?.response);
       console.error("Error response status:", err?.response?.status);
       console.error("Error response data:", err?.response?.data);
-      console.error("Error config:", err?.config);
-      console.error("=== END ERROR DETAILS ===");
       
       const errorDetail = err?.response?.data?.detail || err?.message || "Save failed";
       setGenError(`❌ Save failed: ${errorDetail}`);
@@ -461,23 +522,56 @@ export default function ReportsPage() {
     }
   }
 
-  // Submit report for superadmin review (Barangay admin only)
-  async function handleSubmitReport(reportId: string) {
+  // Send report to superadmin (Barangay admin only) - Creates a copy for superadmin to view
+  async function handleSendToSuperadmin() {
     setIsSubmitting(true);
     setGenError("");
     setGenSuccess("");
     
     try {
-      await api.post(`/api/reports/${reportId}/submit`);
+      const today = new Date().toISOString().slice(0, 10);
+      const barangayId = user?.barangay_id;
       
-      setGenSuccess("✅ Report submitted for superadmin review!");
+      // Create report data
+      const reportData = JSON.parse(JSON.stringify(comprehensiveReportData));
+      
+      // Add sender information to the data
+      reportData.sent_by = user?.username;
+      reportData.sent_from_barangay = user?.barangay_name;
+      reportData.sent_at = new Date().toISOString();
+      
+      const payload = {
+        title: `[From ${user?.barangay_name || 'Barangay'}] Nutrition Monitoring Report - ${formatDate(new Date().toISOString())}`,
+        report_type: "monthly",
+        report_category: "comprehensive",
+        period_start: today,
+        period_end: today,
+        barangay_id: barangayId,
+        data: reportData,
+      };
+      
+      console.log("Sending report to superadmin...");
+      
+      // Save the report which will be visible to superadmin
+      const response = await api.post("/api/reports/generate", payload, {
+        timeout: 60000,
+        maxContentLength: 100 * 1024 * 1024,
+        maxBodyLength: 100 * 1024 * 1024,
+      });
+      
+      // Submit it immediately so superadmin gets notified
+      if (response.data?.id) {
+        await api.post(`/api/reports/${response.data.id}/submit`);
+      }
+      
+      setGenSuccess("✅ Report sent to superadmin successfully! A copy is saved in your 'Saved Reports' tab.");
       setTimeout(() => setGenSuccess(""), 5000);
       
       // Refetch reports list
       queryClient.invalidateQueries({ queryKey: ["reports"] });
     } catch (err: any) {
-      const errorDetail = err?.response?.data?.detail || "Submit failed";
-      setGenError(`❌ Submit failed: ${errorDetail}`);
+      const errorDetail = err?.response?.data?.detail || "Send failed";
+      setGenError(`❌ Send failed: ${errorDetail}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -519,22 +613,22 @@ export default function ReportsPage() {
               )}
             </button>
             
-            {/* Submit Report button - Only for Barangay Admins */}
-            {user?.role === "admin" && selectedReportId && (
+            {/* Send to Superadmin button - Only for Barangay Admins */}
+            {user?.role === "admin" && (
               <button
-                onClick={() => handleSubmitReport(selectedReportId)}
+                onClick={handleSendToSuperadmin}
                 disabled={isSubmitting}
                 className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white font-bold text-sm px-4 py-2 rounded-xl transition-colors"
               >
                 {isSubmitting ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    Submitting...
+                    Sending...
                   </>
                 ) : (
                   <>
                     <FileText className="h-4 w-4" />
-                    Submit to Superadmin
+                    Send to Superadmin
                   </>
                 )}
               </button>

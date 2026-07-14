@@ -23,7 +23,7 @@ router = APIRouter(prefix="/api/reports", tags=["reports"])
 async def list_reports(
     status: Optional[str] = None,
     barangay_id: Optional[UUID] = None,
-    year: int = Query(2025, description="Filter reports by year"),
+    year: int = Query(None, description="Filter reports by year (optional)"),
     db: AsyncSession = Depends(get_db),
     user: Optional[User] = Depends(get_current_user)
 ):
@@ -46,7 +46,7 @@ async def list_reports(
     ]
     stmt = stmt.where(Report.status.in_(status_filter))
     
-    # Year filter - filter by generated_at date
+    # Year filter - filter by generated_at date (optional, if not provided show all years)
     if year:
         start_date = datetime(year, 1, 1).date()
         end_date = datetime(year, 12, 31).date()

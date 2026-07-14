@@ -65,7 +65,7 @@ export function SavedReportsManager({ onSelectReport }: SavedReportsManagerProps
   const [searchQuery, setSearchQuery] = useState("");
 
   const reportsQuery = useQuery({
-    queryKey: ["reports-list"],
+    queryKey: ["reports"],  // Changed from "reports-list" to match invalidation
     queryFn: () => api.get("/api/reports").then(r => r.data),
     refetchInterval: 10_000,
   });

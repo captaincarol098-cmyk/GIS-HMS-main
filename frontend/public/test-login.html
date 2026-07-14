@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Login Test - GIS HMS</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2E7D32;
+            margin-bottom: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        button {
+            background: #2E7D32;
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            width: 100%;
+            margin-top: 10px;
+        }
+        button:hover {
+            background: #1B5E20;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+            display: none;
+        }
+        .success {
+            background: #E8F5E9;
+            border: 1px solid #4CAF50;
+            color: #2E7D32;
+        }
+        .error {
+            background: #FFEBEE;
+            border: 1px solid #F44336;
+            color: #C62828;
+        }
+        .info {
+            background: #E3F2FD;
+            border: 1px solid #2196F3;
+            color: #1565C0;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔐 Login Test Page</h1>
+        
+        <div class="info">
+            <strong>Default Credentials:</strong><br>
+            • Super Admin: superadmin / admin123<br>
+            • Barangay Admin: admin_[barangay] / admin123<br>
+            <br>
+            <strong>Backend:</strong> http://localhost:8000<br>
+            <strong>Frontend:</strong> http://localhost:3001
+        </div>
+
+        <div class="form-group">
+            <label>Quick Select:</label>
+            <select id="quickSelect" onchange="fillQuick()">
+                <option value="">-- Select Account --</option>
+                <option value="superadmin|admin123">Super Admin</option>
+                <option value="admin_poblacion_3|admin123">Barangay Admin (Poblacion 3)</option>
+                <option value="admin_concepcion|admin123">Barangay Admin (Concepcion)</option>
+                <option value="admin_mabini|admin123">Barangay Admin (Mabini)</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label>Username:</label>
+            <input type="text" id="username" placeholder="Enter username" value="">
+        </div>
+
+        <div class="form-group">
+            <label>Password:</label>
+            <input type="password" id="password" placeholder="Enter password" value="">
+        </div>
+
+        <button onclick="testLogin()">🚀 Test Login</button>
+
+        <div id="result" class="result"></div>
+    </div>
+
+    <script>
+        function fillQuick() {
+            const select = document.getElementById('quickSelect');
+            const [username, password] = select.value.split('|');
+            document.getElementById('username').value = username || '';
+            document.getElementById('password').value = password || '';
+        }
+
+        async function testLogin() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const resultDiv = document.getElementById('result');
+
+            if (!username || !password) {
+                showResult('Please enter both username and password', 'error');
+                return;
+            }
+
+            showResult('Testing login...', 'info');
+
+            try {
+                const response = await fetch('http://localhost:8000/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ username, password }),
+                    credentials: 'include'
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    showResult(`✅ LOGIN SUCCESSFUL!<br><br>
+                        <strong>User:</strong> ${data.user.username}<br>
+                        <strong>Role:</strong> ${data.user.role}<br>
+                        ${data.user.barangay_name ? '<strong>Barangay:</strong> ' + data.user.barangay_name + '<br>' : ''}
+                        <strong>Token:</strong> Received (${data.access_token.substring(0, 20)}...)<br><br>
+                        <a href="http://localhost:3001/dashboard" style="color: #2E7D32; font-weight: bold;">→ Go to Dashboard</a>
+                    `, 'success');
+
+                    // Store tokens for actual use
+                    localStorage.setItem('access_token', data.access_token);
+                    localStorage.setItem('refresh_token', data.refresh_token);
+                } else {
+                    showResult(`❌ LOGIN FAILED<br><br>
+                        <strong>Status:</strong> ${response.status}<br>
+                        <strong>Error:</strong> ${data.detail || 'Unknown error'}
+                    `, 'error');
+                }
+            } catch (error) {
+                showResult(`❌ CONNECTION ERROR<br><br>
+                    <strong>Error:</strong> ${error.message}<br><br>
+                    Make sure the backend is running on port 8000!
+                `, 'error');
+            }
+        }
+
+        function showResult(message, type) {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = message;
+            resultDiv.className = 'result ' + type;
+            resultDiv.style.display = 'block';
+        }
+
+        // Auto-fill superadmin on page load
+        window.onload = function() {
+            document.getElementById('username').value = 'superadmin';
+            document.getElementById('password').value = 'admin123';
+        };
+    </script>
+</body>
+</html>
