@@ -1384,27 +1384,28 @@ export function MapView({
         >
           <MapCenterController center={mapCenter} zoom={mapZoom} />
           
-          {/* Show tile layer only if NOT in Heatmap view mode */}
-          {tileKey !== "Heatmap" && (
+          {/* Show tile layer only if NOT in Heatmap or Choropleth view mode */}
+          {tileKey !== "Heatmap" && tileKey !== "Choropleth" && (
             <TileLayer key={tileKey} attribution={tile.attribution} url={tile.url} />
           )}
           
-          {/* Street labels overlay for Satellite and Terrain views */}
-          {(tileKey === "Satellite" || tileKey === "Terrain") && (
-            <TileLayer
-              url={STREET_LABELS_OVERLAY.url}
-              attribution={STREET_LABELS_OVERLAY.attribution}
-              zIndex={1000}
-            />
-          )}
-          
-          {/* For Heatmap tile layer mode, show ONLY heatmap with minimal background - no street labels */}
+          {/* For Heatmap tile layer mode, show minimal basemap - no street labels */}
           {tileKey === "Heatmap" && (
             <TileLayer 
               url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
               attribution="&copy; OpenStreetMap contributors &copy; CARTO"
               zIndex={100}
               opacity={0.15}
+            />
+          )}
+          
+          {/* For Choropleth tile layer mode, show light basemap for context */}
+          {tileKey === "Choropleth" && (
+            <TileLayer 
+              url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+              attribution="&copy; OpenStreetMap contributors &copy; CARTO"
+              zIndex={100}
+              opacity={0.25}
             />
           )}
 
@@ -1417,7 +1418,7 @@ export function MapView({
               setSelectedPurokId={setSelectedPurokId}
               setShowPurokModal={setShowPurokModal}
               showOnlyOutlines={tileKey === "Heatmap" && !choroplethOn}
-              enableChoropleth={choroplethOn}
+              enableChoropleth={choroplethOn || tileKey === "Choropleth"}
               barangaySeverities={barangayList}
             />
           )}
@@ -1430,7 +1431,7 @@ export function MapView({
               onHover={handleHover}
               setSelectedPurokId={setSelectedPurokId}
               setShowPurokModal={setShowPurokModal}
-              showOnlyOutlines={tileKey === "Heatmap" && !choroplethOn}
+              showOnlyOutlines={tileKey === "Heatmap" && !choroplethOn && tileKey !== "Choropleth"}
               enableChoropleth={false}
               barangaySeverities={[]}
             />
@@ -1508,8 +1509,8 @@ export function MapView({
         </div>
       )}
 
-      {/* ── Heatmap legend (shown only when ON or Heatmap layer selected, but NOT when choropleth is ON) ── */}
-      {(heatmapOn || tileKey === "Heatmap") && !choroplethOn && (
+      {/* ── Heatmap legend (shown only when ON or Heatmap layer selected, but NOT when choropleth is ON or Choropleth layer selected) ── */}
+      {(heatmapOn || tileKey === "Heatmap") && !choroplethOn && tileKey !== "Choropleth" && (
         <div className="absolute bottom-16 left-4 z-[999] flex flex-col gap-1.5 rounded-lg border border-slate-200 bg-white/95 px-3 py-2.5 text-xs shadow-md backdrop-blur-sm max-w-[200px]">
           <p className="font-semibold text-slate-700">Malnutrition Intensity</p>
           {TIERS.map((tier) => (
@@ -1521,8 +1522,8 @@ export function MapView({
         </div>
       )}
       
-      {/* ── Choropleth legend (shown only when choropleth is ON) ── */}
-      {choroplethOn && (
+      {/* ── Choropleth legend (shown when choropleth is ON OR Choropleth tile layer is selected) ── */}
+      {(choroplethOn || tileKey === "Choropleth") && (
         <div className="absolute bottom-16 left-4 z-[999] flex flex-col gap-1.5 rounded-lg border border-slate-200 bg-white/95 px-3 py-2.5 text-xs shadow-md backdrop-blur-sm max-w-[220px]">
           <p className="font-semibold text-slate-700">Malnutrition Prevalence</p>
           <span className="flex items-center gap-2 text-slate-600">
