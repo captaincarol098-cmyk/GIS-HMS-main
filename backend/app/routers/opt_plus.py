@@ -3,11 +3,12 @@ OPT Plus API Router
 Endpoints for OPT Plus calculations and 3-tier alert system
 """
 
-from datetime import date, datetime
-from uuid import UUID
-from typing import Optional, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, File, UploadFile
 from pydantic import BaseModel, Field
+from typing import Optional, Literal
+from uuid import UUID
+import uuid
+from datetime import date, datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -32,7 +33,6 @@ from ..services.three_tier_alerts import (
 )
 
 router = APIRouter(prefix="/api/opt-plus", tags=["OPT Plus"])
-
 
 # ============================================================================
 # REQUEST/RESPONSE MODELS
@@ -83,6 +83,8 @@ async def calculate_age(
     """
     Calculate age in months using NNC OPT Plus Guidelines [50]
     
+    ⚠️ NOTE: OPT Plus features are disabled for admin and superadmin roles.
+    
     Algorithm: Chronological Milestone Resolution
     Formula: Age (in months) = FLOOR((Measurement Date - Birth Date) / 30.4375)
     
@@ -111,6 +113,8 @@ async def adjust_height(
 ):
     """
     Adjust height/length based on measurement position per NNC OPT Plus Guidelines [50]
+    
+    ⚠️ NOTE: OPT Plus features are disabled for admin and superadmin roles.
     
     Rules:
     - 0-23 months + Standing (wrong): Add +0.7 cm
@@ -148,6 +152,8 @@ async def calculate_assessment(
 ):
     """
     Complete OPT Plus assessment with all modules
+    
+    ⚠️ NOTE: OPT Plus features are disabled for admin and superadmin roles.
     
     Includes:
     1. Age calculation
@@ -191,6 +197,8 @@ async def get_comprehensive_alert(
     """
     Generate comprehensive 3-tier alert with all analytics
     
+    ⚠️ NOTE: OPT Plus features are disabled for admin and superadmin roles.
+    
     Alert Levels:
     - Warning (🟡 Yellow): Prevalence ≥ 10%
     - Critical (🟠 Orange): Wasting ≥ 5% OR Any Indicator ≥ 15%
@@ -214,6 +222,7 @@ async def get_all_barangay_alerts(
 ):
     """
     Generate alerts for all barangays
+    ⚠️ NOTE: OPT Plus features are disabled for admin and superadmin roles.
     """
     alerts = await generate_all_barangay_alerts(db)
     
@@ -238,6 +247,7 @@ async def get_all_purok_alerts(
 ):
     """
     Generate alerts for all puroks
+    ⚠️ NOTE: OPT Plus features are disabled for admin and superadmin roles.
     """
     # BHW can only access their barangay
     if user.role.value == "admin":
@@ -270,6 +280,7 @@ async def get_prevalence_rates(
 ):
     """
     Calculate malnutrition prevalence rates
+    ⚠️ NOTE: OPT Plus features are disabled for admin and superadmin roles.
     
     Formula:
     Prevalence (%) = (Number of children with condition / Total children assessed) × 100
@@ -311,6 +322,7 @@ async def get_hotspots(
 ):
     """
     Detect malnutrition hotspots
+    ⚠️ NOTE: OPT Plus features are disabled for admin and superadmin roles.
     
     Risk Levels:
     - High Risk (Red): ≥ 30% prevalence
@@ -361,6 +373,7 @@ async def validate_measurement(
 ):
     """
     Validate measurement data against OPT Plus data integrity rules
+    ⚠️ NOTE: OPT Plus features are disabled for admin and superadmin roles.
     
     Rules:
     - Overlapping Edge Logic: Scores exactly -2.00 are NORMAL
@@ -418,6 +431,8 @@ async def get_opt_plus_report(
 ):
     """
     Get OPT Plus report data for dashboard
+    ⚠️ NOTE: OPT Plus features are disabled for admin and superadmin roles.
+    
     Returns aggregated child nutrition data with KPIs and summaries
     Accessible to all authenticated users
     """
@@ -617,16 +632,50 @@ async def import_measurements(
     """
     Import children measurements from Excel file and save to Assessment Records.
     
-    Expected columns in Excel:
-    - full_name (required)
-    - birth_date (required, YYYY-MM-DD format)
-    - sex (required, M or F)
-    - measurement_date (required, YYYY-MM-DD format)
-    - weight_kg (required, decimal)
-    - height_cm (required, decimal)
-    - muac_cm (optional, decimal)
-    - notes (optional)
-    - child_id (optional, UUID - will create new child if not provided)
+    ** ROLE-BASED IMPORT **
+    
+    ADMIN (Individual Child Data):
+    - Imports detailed measurements for specific named children
+    - Children are auto-created if they don't exist (requires columns 10-15)
+    - All children data is linked to actual child records
+    
+    SUPERADMIN (Aggregate Tally Data):
+    - Imports aggregate/anonymous measurement data for reporting
+    - Child names are optional (system generates anonymous entries)
+    - Can provide age_months (column 16) instead of birth_date
+    - Requires barangay_id and purok_id for data organization
+    
+    ** REQUIRED COLUMNS FOR ADMIN **
+    - Column 1: full_name (required)
+    - Column 2: birth_date (required, YYYY-MM-DD)
+    - Column 3: sex (required, M/F)
+    - Column 4: measurement_date (required, YYYY-MM-DD)
+    - Column 5: weight_kg (required, decimal)
+    - Column 6: height_cm (required, decimal)
+    - Column 7: muac_cm (optional)
+    - Column 8: notes (optional)
+    - Column 9: child_id (optional, UUID)
+    
+    AUTO-CREATE (for admin when child not found):
+    - Column 10: address
+    - Column 11: latitude (decimal)
+    - Column 12: longitude (decimal)
+    - Column 13: guardian_name
+    - Column 14: purok_id (UUID)
+    - Column 15: barangay_id (UUID)
+    
+    ** REQUIRED COLUMNS FOR SUPERADMIN **
+    - Column 1: full_name (optional, auto-generated if blank)
+    - Column 2: birth_date (optional if age_months provided)
+    - Column 3: sex (required, M/F)
+    - Column 4: measurement_date (required, YYYY-MM-DD)
+    - Column 5: weight_kg (required, decimal)
+    - Column 6: height_cm (required, decimal)
+    - Column 7: muac_cm (optional)
+    - Column 8: notes (optional)
+    - Column 14: purok_id (required, UUID)
+    - Column 15: barangay_id (required, UUID)
+    - Column 16: age_months (optional, use if birth_date not provided)
     
     Returns summary of imported records and any errors.
     """
@@ -646,65 +695,299 @@ async def import_measurements(
         children_result = await db.scalars(children_stmt)
         children_map = {str(child.id): child for child in children_result}
         
-        # Process each row (skip header)
-        for idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+        # Detect e-OPT PLUS format by looking for the header row
+        is_eopt_format = False
+        data_start_row = 2  # Default for standard format
+        
+        # Scan first 20 rows to find "Child Seq" header
+        for row_num in range(1, min(25, ws.max_row + 1)):
+            row = list(ws.iter_rows(min_row=row_num, max_row=row_num, values_only=True))[0] if ws.max_row >= row_num else []
+            if row and len(row) > 0:
+                # Check if first cell contains "Child Seq"
+                first_cell = str(row[0]) if row[0] else ""
+                if "Child Seq" in first_cell or "child seq" in first_cell.lower():
+                    is_eopt_format = True
+                    data_start_row = row_num + 1  # Data starts right after header
+                    break
+        
+        print(f"DEBUG: Format detected: {'e-OPT PLUS' if is_eopt_format else 'Standard'}, Data starts at row {data_start_row}")
+        
+        # Process each row
+        row_count = 0
+        for idx, row in enumerate(ws.iter_rows(min_row=data_start_row, values_only=True), start=data_start_row):
             try:
-                if not row or all(cell is None for cell in row):
-                    continue  # Skip empty rows
+                row_count += 1
                 
-                # Extract values
-                full_name = row[0]
-                birth_date_val = row[1]
-                sex_val = row[2]
-                measurement_date_val = row[3]
-                weight_kg = row[4]
-                height_cm = row[5]
-                muac_cm = row[6] if len(row) > 6 else None
-                notes = row[7] if len(row) > 7 else None
-                child_id_val = row[8] if len(row) > 8 else None
-                
-                # Validate required fields
-                if not full_name or not birth_date_val or not sex_val:
-                    errors.append(f"Row {idx}: Missing required fields (name, birth_date, sex)")
-                    error_count += 1
+                # Skip completely empty rows
+                if not row or all(cell is None or str(cell).strip() == "" for cell in row):
+                    print(f"DEBUG Row {idx}: Skipped - completely empty")
                     continue
                 
-                if not measurement_date_val or weight_kg is None or height_cm is None:
-                    errors.append(f"Row {idx}: Missing measurement data (date, weight, height)")
+                # Extract values based on format
+                if is_eopt_format:
+                    # e-OPT PLUS format - exact columns from screenshot
+                    full_name = row[3] if len(row) > 3 and row[3] else None  # Column D
+                    mother_name = row[2] if len(row) > 2 and row[2] else None  # Column C
+                    address_location = row[1] if len(row) > 1 and row[1] else None  # Column B
+                    is_ip = row[4] if len(row) > 4 and row[4] else None  # Column E
+                    sex_val = row[5] if len(row) > 5 and row[5] else None  # Column F
+                    birth_date_val = row[6] if len(row) > 6 and row[6] else None  # Column G
+                    measurement_date_val = row[7] if len(row) > 7 and row[7] else None  # Column H
+                    weight_kg = row[8] if len(row) > 8 and row[8] is not None else None  # Column I
+                    height_cm = row[9] if len(row) > 9 and row[9] is not None else None  # Column J
+                    age_months_val = row[10] if len(row) > 10 and row[10] is not None else None  # Column K
+                    
+                    print(f"DEBUG Row {idx}: name={full_name}, sex={sex_val}, dob={birth_date_val}, meas_date={measurement_date_val}, weight={weight_kg}, height={height_cm}")
+                    
+                    muac_cm = None
+                    notes = f"Location: {address_location}, IP: {is_ip}" if address_location or is_ip else None
+                    child_id_val = None
+                    
+                    # Skip if no child name (likely a header or summary row)
+                    if not full_name or str(full_name).strip() in ["", "(Surname, First Name)"]:
+                        print(f"DEBUG Row {idx}: Skipped - no valid child name")
+                        continue
+                    
+                else:
+                    # Standard format
+                    full_name = row[0] if len(row) > 0 and row[0] else None
+                    birth_date_val = row[1] if len(row) > 1 and row[1] else None
+                    sex_val = row[2] if len(row) > 2 and row[2] else None
+                    measurement_date_val = row[3] if len(row) > 3 and row[3] else None
+                    weight_kg = row[4] if len(row) > 4 and row[4] is not None else None
+                    height_cm = row[5] if len(row) > 5 and row[5] is not None else None
+                    muac_cm = row[6] if len(row) > 6 and row[6] else None
+                    notes = row[7] if len(row) > 7 and row[7] else None
+                    child_id_val = row[8] if len(row) > 8 and row[8] else None
+                    age_months_val = row[15] if len(row) > 15 and row[15] else None
+                    mother_name = row[12] if len(row) > 12 and row[12] else None
+                    address_location = row[9] if len(row) > 9 and row[9] else None
+                
+                # Convert date values FIRST - Excel dates come as datetime objects
+                if birth_date_val:
+                    try:
+                        if isinstance(birth_date_val, str):
+                            birth_date = datetime.strptime(birth_date_val, "%Y-%m-%d").date()
+                        elif hasattr(birth_date_val, 'date'):
+                            # It's a datetime object
+                            birth_date = birth_date_val.date()
+                        else:
+                            # Assume it's already a date object
+                            birth_date = birth_date_val
+                    except Exception as e:
+                        errors.append(f"Row {idx}: Invalid birth date format in col {'G' if is_eopt_format else 'B'}: {birth_date_val}")
+                        error_count += 1
+                        continue
+                else:
+                    birth_date = None
+                
+                if measurement_date_val:
+                    try:
+                        if isinstance(measurement_date_val, str):
+                            measurement_date = datetime.strptime(measurement_date_val, "%Y-%m-%d").date()
+                        elif hasattr(measurement_date_val, 'date'):
+                            # It's a datetime object
+                            measurement_date = measurement_date_val.date()
+                        else:
+                            # Assume it's already a date object
+                            measurement_date = measurement_date_val
+                    except Exception as e:
+                        errors.append(f"Row {idx}: Invalid measurement date format in col {'H' if is_eopt_format else 'D'}: {measurement_date_val}")
+                        error_count += 1
+                        continue
+                else:
+                    measurement_date = None
+                
+                # SUPERADMIN: Can import without child names (aggregate data)
+                # ADMIN: Must provide child names (individual data)
+                if user.role.value == "super_admin":
+                    # For superadmin, generate anonymous child name if not provided
+                    if not full_name:
+                        full_name = f"Anonymous-{measurement_date_val}-{idx}"
+                    # Birth date can be calculated from age if provided
+                    if not birth_date and age_months_val and measurement_date:
+                        from dateutil.relativedelta import relativedelta
+                        birth_date = measurement_date - relativedelta(months=int(age_months_val))
+                
+                # Validate required fields based on role
+                if user.role.value == "admin":
+                    # Admin must provide complete child information
+                    if not full_name or not birth_date or not sex_val:
+                        missing_fields = []
+                        if not full_name: missing_fields.append(f"name (col {'D' if is_eopt_format else 'A'}): '{full_name}'")
+                        if not birth_date: missing_fields.append(f"birth_date (col {'G' if is_eopt_format else 'B'}): '{birth_date_val}' -> '{birth_date}'")
+                        if not sex_val: missing_fields.append(f"sex (col {'F' if is_eopt_format else 'C'}): '{sex_val}'")
+                        error_msg = f"Row {idx}: Missing required fields: {', '.join(missing_fields)}"
+                        errors.append(error_msg)
+                        print(f"DEBUG ERROR: {error_msg}")
+                        print(f"  Raw data: name={full_name!r}, birth_val={birth_date_val!r}, birth_date={birth_date!r}, sex={sex_val!r}")
+                        error_count += 1
+                        continue
+                else:
+                    # Superadmin needs sex and either birth_date or age_months
+                    if not sex_val:
+                        errors.append(f"Row {idx}: Missing required field (sex)")
+                        error_count += 1
+                        continue
+                    if not birth_date and not age_months_val:
+                        errors.append(f"Row {idx}: Must provide either birth_date (column 2) or age_months (column 16)")
+                        error_count += 1
+                        continue
+                
+                if not measurement_date or weight_kg is None or height_cm is None:
+                    missing_fields = []
+                    if not measurement_date: missing_fields.append(f"measurement_date (col {'H' if is_eopt_format else 'D'}): '{measurement_date_val}' -> '{measurement_date}'")
+                    if weight_kg is None: missing_fields.append(f"weight_kg (col {'I' if is_eopt_format else 'E'}): '{weight_kg}'")
+                    if height_cm is None: missing_fields.append(f"height_cm (col {'J' if is_eopt_format else 'F'}): '{height_cm}'")
+                    error_msg = f"Row {idx}: Missing measurement data: {', '.join(missing_fields)}"
+                    errors.append(error_msg)
+                    print(f"DEBUG ERROR: {error_msg}")
                     error_count += 1
                     continue
-                
-                # Convert date strings if necessary
-                if isinstance(birth_date_val, str):
-                    birth_date = datetime.strptime(birth_date_val, "%Y-%m-%d").date()
-                else:
-                    birth_date = birth_date_val
-                
-                if isinstance(measurement_date_val, str):
-                    measurement_date = datetime.strptime(measurement_date_val, "%Y-%m-%d").date()
-                else:
-                    measurement_date = measurement_date_val
                 
                 # Normalize sex
                 sex_normalized = "M" if str(sex_val).upper() in ["M", "MALE"] else "F"
+                sex_name = "male" if sex_normalized == "M" else "female"
                 
-                # Find or get child
+                # Find or create child based on role
                 child = None
-                if child_id_val:
-                    child_id_str = str(child_id_val)
-                    child = children_map.get(child_id_str)
                 
-                if not child:
-                    # Try to find by name (case-insensitive)
-                    name_search_stmt = select(Child).where(
-                        Child.full_name.ilike(f"%{full_name}%")
-                    )
-                    child = (await db.scalars(name_search_stmt)).first()
-                
-                if not child:
-                    errors.append(f"Row {idx}: Child '{full_name}' not found. Please add child first.")
-                    error_count += 1
-                    continue
+                if user.role.value == "super_admin":
+                    # SUPERADMIN: Auto-create anonymous children for aggregate data
+                    # Don't search for existing children, just create new ones for tally
+                    
+                    # Get location data - use defaults if not provided
+                    address_val = row[9] if len(row) > 9 and row[9] else "Aggregate Data Import"
+                    latitude_val = row[10] if len(row) > 10 and row[10] else 8.9483  # Default coordinates
+                    longitude_val = row[11] if len(row) > 11 and row[11] else 125.5282
+                    guardian_name_val = row[12] if len(row) > 12 and row[12] else "N/A"
+                    purok_id_val = row[13] if len(row) > 13 and row[13] else None
+                    barangay_id_val = row[14] if len(row) > 14 and row[14] else None
+                    
+                    # For superadmin, barangay and purok are required for data organization
+                    if not barangay_id_val or not purok_id_val:
+                        errors.append(f"Row {idx}: Barangay ID (column 15) and Purok ID (column 14) are required for aggregate data")
+                        error_count += 1
+                        continue
+                    
+                    try:
+                        # Create anonymous child for aggregate data
+                        new_child = Child(
+                            full_name=full_name,  # Will be "Anonymous-date-rownum"
+                            birth_date=birth_date if birth_date_val else measurement_date,  # Use measurement date if birth date not provided
+                            sex=Sex.male if sex_normalized == "M" else Sex.female,
+                            guardian_name=str(guardian_name_val),
+                            purok_id=uuid.UUID(str(purok_id_val)),
+                            barangay_id=uuid.UUID(str(barangay_id_val)),
+                            latitude=float(latitude_val),
+                            longitude=float(longitude_val),
+                            contact_number=None,
+                            household_id=None,
+                            is_active=True
+                        )
+                        db.add(new_child)
+                        await db.flush()
+                        child = new_child
+                        children_map[str(child.id)] = child
+                    except Exception as create_error:
+                        errors.append(f"Row {idx}: Failed to create aggregate data record: {str(create_error)}")
+                        error_count += 1
+                        continue
+                        
+                elif user.role.value == "admin":
+                    # ADMIN: Search for existing children or auto-create with full details
+                    if child_id_val:
+                        child_id_str = str(child_id_val)
+                        child = children_map.get(child_id_str)
+                    
+                    if not child:
+                        # Try to find by name (case-insensitive)
+                        name_search_stmt = select(Child).where(
+                            Child.full_name.ilike(f"%{full_name}%")
+                        )
+                        child = (await db.scalars(name_search_stmt)).first()
+                    
+                    # If child still not found, auto-create with provided data
+                    if not child:
+                        # Get additional columns for child creation if available
+                        if is_eopt_format:
+                            # Use data from e-OPT format
+                            guardian_name_val = mother_name if mother_name else full_name
+                            address_val = address_location if address_location else "Unknown"
+                            # e-OPT format doesn't have location columns, use defaults
+                            latitude_val = 8.9483  # Default coords
+                            longitude_val = 125.5282
+                            purok_id_val = None
+                            barangay_id_val = None
+                        else:
+                            address_val = row[9] if len(row) > 9 and row[9] else None
+                            guardian_name_val = row[12] if len(row) > 12 and row[12] else full_name
+                            latitude_val = row[10] if len(row) > 10 and row[10] else 8.9483  # Default coords
+                            longitude_val = row[11] if len(row) > 11 and row[11] else 125.5282
+                            purok_id_val = row[13] if len(row) > 13 and row[13] else None
+                            barangay_id_val = row[14] if len(row) > 14 and row[14] else None
+                        
+                        # For admin, use their assigned barangay if not provided
+                        if not barangay_id_val and user.barangay_id:
+                            barangay_id_val = user.barangay_id
+                            print(f"DEBUG Row {idx}: Using admin's barangay: {barangay_id_val}")
+                        
+                        # If still no barangay, we need to get one from system
+                        if not barangay_id_val:
+                            # Get first barangay as fallback
+                            brgy_stmt = select(Barangay).limit(1)
+                            first_brgy = (await db.scalars(brgy_stmt)).first()
+                            if first_brgy:
+                                barangay_id_val = first_brgy.id
+                                print(f"DEBUG Row {idx}: Using first available barangay: {barangay_id_val}")
+                        
+                        # Get first purok of the barangay if not provided
+                        if not purok_id_val and barangay_id_val:
+                            purok_stmt = select(Purok).where(Purok.barangay_id == barangay_id_val).limit(1)
+                            first_purok = (await db.scalars(purok_stmt)).first()
+                            if first_purok:
+                                purok_id_val = first_purok.id
+                                print(f"DEBUG Row {idx}: Using first purok of barangay: {purok_id_val}")
+                        
+                        # Check if we have minimal required data
+                        if not barangay_id_val or not purok_id_val:
+                            error_msg = f"Row {idx}: Child '{full_name}' not found and cannot auto-create (no barangay/purok available in system)"
+                            errors.append(error_msg)
+                            print(f"DEBUG ERROR: {error_msg}")
+                            print(f"  barangay_id_val={barangay_id_val}, purok_id_val={purok_id_val}")
+                            print(f"  user.barangay_id={user.barangay_id if hasattr(user, 'barangay_id') else 'N/A'}")
+                            error_count += 1
+                            continue
+                        
+                        try:
+                            # Create new child with provided data
+                            print(f"DEBUG Row {idx}: Creating child '{full_name}' with barangay={barangay_id_val}, purok={purok_id_val}")
+                            new_child = Child(
+                                full_name=full_name,
+                                birth_date=birth_date,
+                                sex=Sex.male if sex_normalized == "M" else Sex.female,
+                                guardian_name=str(guardian_name_val),
+                                purok_id=uuid.UUID(str(purok_id_val)),
+                                barangay_id=uuid.UUID(str(barangay_id_val)),
+                                latitude=float(latitude_val),
+                                longitude=float(longitude_val),
+                                contact_number=None,
+                                household_id=None,
+                                is_active=True
+                            )
+                            db.add(new_child)
+                            await db.flush()
+                            child = new_child
+                            children_map[str(child.id)] = child
+                            print(f"DEBUG Row {idx}: Child created successfully with ID: {child.id}")
+                        except Exception as create_error:
+                            import traceback
+                            error_msg = f"Row {idx}: Failed to auto-create child '{full_name}': {str(create_error)}"
+                            errors.append(error_msg)
+                            print(f"DEBUG ERROR: {error_msg}")
+                            print(f"  Traceback: {traceback.format_exc()}")
+                            error_count += 1
+                            continue
                 
                 # Calculate age in months
                 age_months = calculate_age_in_months(birth_date, measurement_date)
@@ -721,10 +1004,12 @@ async def import_measurements(
                 
                 # Calculate full assessment
                 assessment = calculate_full_opt_plus_assessment(
-                    sex=sex_normalized,
-                    age_months=age_months,
+                    sex=sex_name,
+                    birth_date=birth_date,
+                    measurement_date=measurement_date,
                     weight_kg=float(weight_kg),
                     height_cm=adjusted_height,
+                    measurement_position=position,
                     has_bilateral_edema=False
                 )
                 
@@ -759,22 +1044,55 @@ async def import_measurements(
                 })
                 
             except Exception as e:
-                errors.append(f"Row {idx}: {str(e)}")
+                import traceback
+                error_msg = f"Row {idx}: {str(e)}"
+                errors.append(error_msg)
+                print(f"DEBUG EXCEPTION: {error_msg}")
+                print(f"  Exception type: {type(e).__name__}")
+                print(f"  Traceback: {traceback.format_exc()}")
                 error_count += 1
                 continue
         
         # Commit all records
         await db.commit()
         
+        print(f"DEBUG: Import complete - Processed {row_count} rows, Imported {imported_count}, Errors {error_count}")
+        
+        # Categorize errors for better debugging
+        error_categories = {}
+        for err in errors:
+            if "Missing required fields" in err:
+                error_categories.setdefault("Missing Data", []).append(err)
+            elif "Invalid" in err and "date" in err:
+                error_categories.setdefault("Date Errors", []).append(err)
+            elif "not found" in err or "auto-create" in err:
+                error_categories.setdefault("Child Lookup/Creation", []).append(err)
+            elif "Missing measurement data" in err:
+                error_categories.setdefault("Missing Measurements", []).append(err)
+            elif "exceeds OPT Plus range" in err:
+                error_categories.setdefault("Age Range", []).append(err)
+            else:
+                error_categories.setdefault("Other Errors", []).append(err)
+        
+        # Build categorized error summary for console
+        print("\n=== ERROR SUMMARY ===")
+        for category, category_errors in error_categories.items():
+            print(f"{category}: {len(category_errors)} errors")
+            if len(category_errors) <= 3:
+                for err in category_errors:
+                    print(f"  - {err}")
+        
         return {
             "success": True,
             "imported": imported_count,
             "errors": error_count,
-            "error_details": errors[:10],  # Return first 10 errors
+            "error_details": errors,  # Return all errors
+            "error_categories": error_categories,  # Categorized for frontend
             "imported_records": imported_records,
-            "message": f"Successfully imported {imported_count} measurements"
+            "message": f"Successfully imported {imported_count} measurements. Processed {row_count} rows total."
         }
         
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=400, detail=f"Import failed: {str(e)}")
+

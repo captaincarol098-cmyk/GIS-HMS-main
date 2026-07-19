@@ -1,5 +1,6 @@
 "use client";
 import "@/styles/admin.css";
+import "@/styles/analytics.css";
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -18,7 +19,6 @@ import {
   PieChart, Pie, Cell, BarChart, Bar, Legend, AreaChart, Area
 } from "recharts";
 import { SuperAdminAIInsightsWidget } from "@/components/dashboard/SuperAdminAIInsightsWidget";
-import { NutritionalStatusAnalytics } from "./NutritionalStatusAnalytics";
 
 interface SuperAdminAnalyticsProps {
   selectedYear: number;
@@ -147,10 +147,10 @@ export function SuperAdminAnalytics({
       </div>
 
       {/* AI INSIGHTS SECTION - City-Wide Strategic Analysis */}
-      <div className="admin-glass-panel p-6 border-l-4 border-l-emerald-500">
+      <div className="chart-container p-6 border-l-4 border-l-emerald-500">
         <div className="flex items-center gap-3 mb-4">
           <Brain className="h-6 w-6 text-emerald-600" />
-          <h2 className="text-lg font-extrabold text-slate-900">🤖 City-Wide AI Strategic Insights</h2>
+          <h2 className="chart-title text-lg text-slate-900">🤖 City-Wide AI Strategic Insights</h2>
         </div>
         
         {/* Debugging info - shows backend connection status */}
@@ -212,8 +212,8 @@ export function SuperAdminAnalytics({
       {/* Main Charts Grid - City Level */}
       <div className="grid gap-6 md:grid-cols-2 auto-rows-max">
         {/* Card 1: City Malnutrition Trend (Monthly) */}
-        <div className="admin-glass-panel p-5 h-[320px] flex flex-col">
-          <h3 className="text-sm font-extrabold text-slate-800 tracking-tight mb-4">
+        <div className="chart-container h-[320px] flex flex-col">
+          <h3 className="chart-title text-sm tracking-tight mb-4">
             🏙️ City Malnutrition Trend (Monthly)
           </h3>
           <div className="flex-1 min-h-0 w-full">
@@ -233,8 +233,8 @@ export function SuperAdminAnalytics({
         </div>
 
         {/* Card 2: City Nutritional Status Distribution */}
-        <div className="admin-glass-panel p-5 h-[320px] flex flex-col">
-          <h3 className="text-sm font-extrabold text-slate-800 tracking-tight mb-2">
+        <div className="chart-container h-[320px] flex flex-col">
+          <h3 className="chart-title text-sm tracking-tight mb-2">
             🏙️ City Nutritional Status Distribution
           </h3>
           <div className="relative flex-1 min-h-0 flex items-center justify-center">
@@ -272,8 +272,8 @@ export function SuperAdminAnalytics({
         </div>
 
         {/* Card 3: Barangay Comparison - Malnutrition Rates */}
-        <div className="admin-glass-panel p-5 h-auto flex flex-col">
-          <h3 className="text-sm font-extrabold text-slate-800 tracking-tight mb-4">
+        <div className="chart-container h-auto flex flex-col">
+          <h3 className="chart-title text-sm tracking-tight mb-4">
             📊 Top 10 Barangay Comparison (Malnutrition Rate)
           </h3>
           <div className="h-[280px] w-full">
@@ -294,46 +294,38 @@ export function SuperAdminAnalytics({
         </div>
 
         {/* Card 4: City Risk Distribution */}
-        <div className="admin-glass-panel p-5 h-auto flex flex-col justify-between">
-          <h3 className="text-sm font-extrabold text-slate-800 tracking-tight border-b border-slate-100 pb-2.5">
+        <div className="chart-container h-auto flex flex-col justify-between">
+          <h3 className="chart-title text-sm tracking-tight border-b border-slate-100 pb-2.5">
             ⚠️ City Risk Classification
           </h3>
           <div className="grid grid-cols-2 gap-3 mt-4">
-            <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-4 border border-green-200">
-              <p className="text-[10px] font-bold text-green-700 uppercase tracking-wider mb-1">Low Risk</p>
-              <p className="text-3xl font-black text-green-700">
-                {cityTotals.low}
-              </p>
-              <p className="text-xs text-green-600 mt-1">{((cityTotals.low / cityTotals.total) * 100).toFixed(1)}% of population</p>
+            <div className="stat-card bg-gradient-to-br from-green-50 to-green-100 border border-green-200 p-4">
+              <span className="analytics-badge low">Low Risk</span>
+              <p className="stat-value mt-2 text-green-700">{cityTotals.low}</p>
+              <p className="stat-label mt-1 text-green-600">{((cityTotals.low / cityTotals.total) * 100).toFixed(1)}% of population</p>
             </div>
-            <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-lg p-4 border border-yellow-200">
-              <p className="text-[10px] font-bold text-yellow-700 uppercase tracking-wider mb-1">At Risk</p>
-              <p className="text-3xl font-black text-yellow-700">
-                {cityTotals.atRisk}
-              </p>
-              <p className="text-xs text-yellow-600 mt-1">{((cityTotals.atRisk / cityTotals.total) * 100).toFixed(1)}% of population</p>
+            <div className="stat-card bg-gradient-to-br from-yellow-50 to-yellow-100 border border-yellow-200 p-4">
+              <span className="analytics-badge medium">At Risk</span>
+              <p className="stat-value mt-2 text-yellow-700">{cityTotals.atRisk}</p>
+              <p className="stat-label mt-1 text-yellow-600">{((cityTotals.atRisk / cityTotals.total) * 100).toFixed(1)}% of population</p>
             </div>
-            <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg p-4 border border-orange-200">
-              <p className="text-[10px] font-bold text-orange-700 uppercase tracking-wider mb-1">High Risk</p>
-              <p className="text-3xl font-black text-orange-700">
-                {cityTotals.highRisk}
-              </p>
-              <p className="text-xs text-orange-600 mt-1">{((cityTotals.highRisk / cityTotals.total) * 100).toFixed(1)}% of population</p>
+            <div className="stat-card bg-gradient-to-br from-orange-50 to-orange-100 border border-orange-200 p-4">
+              <span className="analytics-badge high">High Risk</span>
+              <p className="stat-value mt-2 text-orange-700">{cityTotals.highRisk}</p>
+              <p className="stat-label mt-1 text-orange-600">{((cityTotals.highRisk / cityTotals.total) * 100).toFixed(1)}% of population</p>
             </div>
-            <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-lg p-4 border border-red-200">
-              <p className="text-[10px] font-bold text-red-700 uppercase tracking-wider mb-1">Critical (SAM)</p>
-              <p className="text-3xl font-black text-red-700">
-                {cityTotals.critical}
-              </p>
-              <p className="text-xs text-red-600 mt-1">{((cityTotals.critical / cityTotals.total) * 100).toFixed(1)}% of population</p>
+            <div className="stat-card bg-gradient-to-br from-red-50 to-red-100 border border-red-200 p-4">
+              <span className="analytics-badge critical">Critical (SAM)</span>
+              <p className="stat-value mt-2 text-red-700">{cityTotals.critical}</p>
+              <p className="stat-label mt-1 text-red-600">{((cityTotals.critical / cityTotals.total) * 100).toFixed(1)}% of population</p>
             </div>
           </div>
         </div>
 
         {/* Card 5: City Predictive Forecast Chart */}
-        <div className="col-span-full admin-glass-panel p-5">
+        <div className="col-span-full chart-container">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-extrabold text-slate-800 tracking-tight">
+            <h3 className="chart-title text-sm tracking-tight">
               🔮 City-Wide Predictive Forecast (Next 3 Months)
             </h3>
             <button
@@ -383,8 +375,8 @@ export function SuperAdminAnalytics({
         </div>
 
         {/* Card 6: City Coverage Overview */}
-        <div className="col-span-full admin-glass-panel p-5 bg-gradient-to-r from-slate-50 to-blue-50">
-          <h3 className="text-sm font-extrabold text-slate-800 tracking-tight mb-4">
+        <div className="col-span-full chart-container bg-gradient-to-r from-slate-50 to-blue-50">
+          <h3 className="chart-title text-sm tracking-tight mb-4">
             🏥 City Coverage & Program Overview
           </h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -407,8 +399,10 @@ export function SuperAdminAnalytics({
             </div>
             <div className="bg-white rounded-lg p-4 border border-slate-200">
               <p className="text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">Data Freshness</p>
-              <p className="text-xl font-black text-green-600">Live</p>
-              <p className="text-xs text-slate-500 mt-2">Real-time updates every 10s</p>
+              <div className="mt-1 mb-2">
+                <span className="realtime-indicator">Live</span>
+              </div>
+              <p className="text-xs text-slate-500">Real-time updates every 10s</p>
             </div>
           </div>
         </div>
@@ -499,46 +493,46 @@ export function SuperAdminAnalytics({
           <div className="space-y-6">
             {/* KPI Cards */}
             <div className="grid gap-4 md:grid-cols-5">
-              <div className="admin-glass-panel p-4 bg-gradient-to-br from-green-50 to-emerald-50 border-l-4 border-l-green-500">
-                <p className="text-xs font-bold text-green-700 uppercase tracking-wider mb-2">Children 0-59m</p>
-                <p className="text-2xl font-black text-green-900">{optPlusQuery.data.children_0_59_months.toLocaleString()}</p>
-                <p className="text-xs text-green-600 mt-1">Monitored children</p>
+              <div className="stat-card bg-gradient-to-br from-green-50 to-emerald-50 border-l-4 border-l-green-500 p-4">
+                <span className="analytics-badge low">Children 0-59m</span>
+                <p className="stat-value text-green-900 mt-2">{optPlusQuery.data.children_0_59_months.toLocaleString()}</p>
+                <p className="stat-label">Monitored children</p>
               </div>
 
-              <div className="admin-glass-panel p-4 bg-gradient-to-br from-blue-50 to-cyan-50 border-l-4 border-l-blue-500">
-                <p className="text-xs font-bold text-blue-700 uppercase tracking-wider mb-2">Undernutrition 0-59m</p>
-                <p className="text-2xl font-black text-blue-900">{optPlusQuery.data.summary.undernutrition_0_59}</p>
-                <p className="text-xs text-blue-600 mt-1">
+              <div className="stat-card bg-gradient-to-br from-blue-50 to-cyan-50 border-l-4 border-l-blue-500 p-4">
+                <span className="analytics-badge low" style={{ background: "linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%)", color: "#1e3a8a", border: "1px solid #93c5fd" }}>Undernutrition 0-59m</span>
+                <p className="stat-value text-blue-900 mt-2">{optPlusQuery.data.summary.undernutrition_0_59}</p>
+                <p className="stat-label">
                   {optPlusQuery.data.children_0_59_months > 0 
                     ? ((optPlusQuery.data.summary.undernutrition_0_59 / optPlusQuery.data.children_0_59_months) * 100).toFixed(1)
-                    : "0"}%
+                    : "0"}% of total
                 </p>
               </div>
 
-              <div className="admin-glass-panel p-4 bg-gradient-to-br from-orange-50 to-amber-50 border-l-4 border-l-orange-500">
-                <p className="text-xs font-bold text-orange-700 uppercase tracking-wider mb-2">Undernutrition 0-23m</p>
-                <p className="text-2xl font-black text-orange-900">{optPlusQuery.data.summary.undernutrition_0_23}</p>
-                <p className="text-xs text-orange-600 mt-1">Focus group</p>
+              <div className="stat-card bg-gradient-to-br from-orange-50 to-amber-50 border-l-4 border-l-orange-500 p-4">
+                <span className="analytics-badge medium">Undernutrition 0-23m</span>
+                <p className="stat-value text-orange-900 mt-2">{optPlusQuery.data.summary.undernutrition_0_23}</p>
+                <p className="stat-label">Focus group</p>
               </div>
 
-              <div className="admin-glass-panel p-4 bg-gradient-to-br from-red-50 to-pink-50 border-l-4 border-l-red-500">
-                <p className="text-xs font-bold text-red-700 uppercase tracking-wider mb-2">Overweight 0-59m</p>
-                <p className="text-2xl font-black text-red-900">{optPlusQuery.data.summary.overweight_0_59}</p>
-                <p className="text-xs text-red-600 mt-1">Needs intervention</p>
+              <div className="stat-card bg-gradient-to-br from-red-50 to-pink-50 border-l-4 border-l-red-500 p-4">
+                <span className="analytics-badge critical">Overweight 0-59m</span>
+                <p className="stat-value text-red-900 mt-2">{optPlusQuery.data.summary.overweight_0_59}</p>
+                <p className="stat-label">Needs intervention</p>
               </div>
 
-              <div className="admin-glass-panel p-4 bg-gradient-to-br from-purple-50 to-indigo-50 border-l-4 border-l-purple-500">
-                <p className="text-xs font-bold text-purple-700 uppercase tracking-wider mb-2">Coverage %</p>
-                <p className="text-2xl font-black text-purple-900">{optPlusQuery.data.coverage_percentage.toFixed(1)}%</p>
-                <p className="text-xs text-purple-600 mt-1">Assessment rate</p>
+              <div className="stat-card bg-gradient-to-br from-purple-50 to-indigo-50 border-l-4 border-l-purple-500 p-4">
+                <span className="analytics-badge high" style={{ background: "linear-gradient(135deg, #f3e8ff 0%, #e9d5ff 100%)", color: "#581c87", border: "1px solid #d8b4fe" }}>Coverage %</span>
+                <p className="stat-value text-purple-900 mt-2">{optPlusQuery.data.coverage_percentage.toFixed(1)}%</p>
+                <p className="stat-label">Assessment rate</p>
               </div>
             </div>
 
             {/* Charts Grid */}
             <div className="grid gap-6 md:grid-cols-2">
               {/* Chart 1: Age Group Distribution Bar Chart */}
-              <div className="admin-glass-panel p-5 h-[300px] flex flex-col">
-                <h3 className="text-sm font-extrabold text-slate-800 tracking-tight mb-4">
+              <div className="chart-container h-[300px] flex flex-col">
+                <h3 className="chart-title text-sm tracking-tight mb-4">
                   📊 Children by Age Group
                 </h3>
                 <div className="flex-1 min-h-0 w-full">
@@ -555,8 +549,8 @@ export function SuperAdminAnalytics({
               </div>
 
               {/* Chart 2: Gender Distribution Pie Chart */}
-              <div className="admin-glass-panel p-5 h-[300px] flex flex-col">
-                <h3 className="text-sm font-extrabold text-slate-800 tracking-tight mb-4">
+              <div className="chart-container h-[300px] flex flex-col">
+                <h3 className="chart-title text-sm tracking-tight mb-4">
                   👥 Gender Distribution
                 </h3>
                 <div className="flex-1 min-h-0 w-full flex items-center justify-center">
@@ -588,8 +582,8 @@ export function SuperAdminAnalytics({
               </div>
 
               {/* Chart 3: Nutritional Status Breakdown */}
-              <div className="admin-glass-panel p-5 h-[300px] flex flex-col">
-                <h3 className="text-sm font-extrabold text-slate-800 tracking-tight mb-4">
+              <div className="chart-container h-[300px] flex flex-col">
+                <h3 className="chart-title text-sm tracking-tight mb-4">
                   🥗 Nutritional Status Summary
                 </h3>
                 <div className="flex-1 min-h-0 w-full">
@@ -615,8 +609,8 @@ export function SuperAdminAnalytics({
               </div>
 
               {/* Chart 4: Indicators Comparison */}
-              <div className="admin-glass-panel p-5 h-[300px] flex flex-col">
-                <h3 className="text-sm font-extrabold text-slate-800 tracking-tight mb-4">
+              <div className="chart-container h-[300px] flex flex-col">
+                <h3 className="chart-title text-sm tracking-tight mb-4">
                   📈 Assessment Indicators Count
                 </h3>
                 <div className="flex-1 min-h-0 w-full">
@@ -642,25 +636,25 @@ export function SuperAdminAnalytics({
             {/* Summary Tables */}
             <div className="grid gap-6 md:grid-cols-2">
               {/* Age Group Table */}
-              <div className="admin-glass-panel p-5">
-                <h3 className="text-sm font-extrabold text-slate-800 tracking-tight mb-4">
+              <div className="chart-container">
+                <h3 className="chart-title text-sm tracking-tight mb-4">
                   📋 Age Group Distribution Table
                 </h3>
                 <div className="overflow-x-auto">
-                  <table className="w-full border-collapse text-xs">
+                  <table className="analytics-table text-xs">
                     <thead>
-                      <tr className="bg-gradient-to-r from-emerald-600 to-emerald-500 text-white">
-                        <th className="border border-emerald-700 px-3 py-2 text-left font-bold">Age Group</th>
-                        <th className="border border-emerald-700 px-3 py-2 text-center font-bold">Count</th>
-                        <th className="border border-emerald-700 px-3 py-2 text-center font-bold">%</th>
+                      <tr>
+                        <th>Age Group</th>
+                        <th className="text-center">Count</th>
+                        <th className="text-center">%</th>
                       </tr>
                     </thead>
                     <tbody>
                       {optPlusQuery.data.age_group_data.map((group: any) => (
-                        <tr key={group.age_group} className="bg-white hover:bg-slate-50 transition">
-                          <td className="border border-slate-200 px-3 py-2 font-semibold text-slate-900">{group.age_group}</td>
-                          <td className="border border-slate-200 px-3 py-2 text-center font-bold text-emerald-600">{group.count}</td>
-                          <td className="border border-slate-200 px-3 py-2 text-center text-slate-700">
+                        <tr key={group.age_group}>
+                          <td className="font-semibold text-slate-900">{group.age_group}</td>
+                          <td className="text-center font-bold text-emerald-600">{group.count}</td>
+                          <td className="text-center text-slate-700">
                             {optPlusQuery.data.children_0_59_months > 0 
                               ? ((group.count / optPlusQuery.data.children_0_59_months) * 100).toFixed(1)
                               : "0"}%
@@ -673,8 +667,8 @@ export function SuperAdminAnalytics({
               </div>
 
               {/* Summary Stats Table */}
-              <div className="admin-glass-panel p-5">
-                <h3 className="text-sm font-extrabold text-slate-800 tracking-tight mb-4">
+              <div className="chart-container">
+                <h3 className="chart-title text-sm tracking-tight mb-4">
                   📊 Nutritional Status Summary
                 </h3>
                 <div className="space-y-3">
@@ -725,15 +719,6 @@ export function SuperAdminAnalytics({
             <p className="text-slate-600 font-semibold">No OPT Plus data available for the selected period</p>
           </div>
         )}
-      </div>
-
-      {/* Nutritional Status Analytics Section */}
-      <div className="admin-glass-panel p-6 border-l-4 border-l-blue-500">
-        <div className="flex items-center gap-3 mb-6">
-          <Zap className="h-6 w-6 text-blue-600" />
-          <h2 className="text-lg font-extrabold text-slate-900">📊 Nutritional Status Analytics (Operation Timbang)</h2>
-        </div>
-        <NutritionalStatusAnalytics selectedYear={selectedYear} />
       </div>
     </div>
   );

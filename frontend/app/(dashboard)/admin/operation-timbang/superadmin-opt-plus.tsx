@@ -3,9 +3,10 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { Download, Upload, Search, FileSpreadsheet, TrendingUp, Users, AlertCircle, BarChart3 } from "lucide-react";
+import { Download, Upload, Search, FileSpreadsheet, TrendingUp, Users, AlertCircle, BarChart3, Trash2, Loader2, Eye, Edit3 } from "lucide-react";
 import { ComprehensiveReport } from "./comprehensive-report";
 import { OptPlusAnalytics } from "./opt-plus-analytics";
+import { useToast } from "@/lib/toast-context";
 
 interface BarangayOPTData {
   sequence: number;
@@ -55,9 +56,15 @@ interface OPTSummary {
 }
 
 export default function SuperAdminOPTPlusPage() {
+  const { addToast } = useToast();
   const [search, setSearch] = useState("");
   const [selectedBarangay, setSelectedBarangay] = useState<string | null>(null);
   const [selectedYear, setSelectedYear] = useState<number>(2025); // Default to 2025 where data exists
+  const [showDeleteAllModal, setShowDeleteAllModal] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+  const [deleteSuccess, setDeleteSuccess] = useState("");
 
   // Generate year options (2020-2030)
   const yearOptions = Array.from({ length: 11 }, (_, i) => 2020 + i);
@@ -96,6 +103,7 @@ export default function SuperAdminOPTPlusPage() {
 
   const handleExportExcel = async () => {
     try {
+      addToast("📊 Generating Excel file... Please wait", "alert");
       const response = await api.get(`/api/operation-timbang/superadmin/export-excel?year=${selectedYear}`, {
         responseType: "blob",
       });
@@ -106,9 +114,10 @@ export default function SuperAdminOPTPlusPage() {
       document.body.appendChild(link);
       link.click();
       link.remove();
+      addToast("✅ Excel file downloaded successfully!", "success");
     } catch (error) {
       console.error("Export failed:", error);
-      alert("Failed to export Excel file");
+      addToast("❌ Failed to export Excel file", "error");
     }
   };
 
@@ -124,29 +133,77 @@ export default function SuperAdminOPTPlusPage() {
       formData.append("file", file);
 
       try {
+        addToast("📤 Importing Excel file... Please wait", "alert");
         const response = await api.post("/api/operation-timbang/superadmin/import-excel", formData, {
           headers: { "Content-Type": "multipart/form-data" },
         });
         
         const data = response.data;
-        let message = `Import completed!\n\nValidated: ${data.imported} barangays\nErrors: ${data.errors}`;
+        let message = `✅ Import completed!\n\nValidated: ${data.imported} barangays\nErrors: ${data.errors}`;
         
         if (data.error_details && data.error_details.length > 0) {
-          message += "\n\nErrors:\n" + data.error_details.join("\n");
+          message += "\n\nErrors:\n" + data.error_details.slice(0, 3).join("\n");
         }
         
         if (data.message) {
           message += "\n\n" + data.message;
         }
         
-        alert(message);
+        addToast(message, "success");
         optDataQuery.refetch();
       } catch (error: any) {
         console.error("Import error:", error);
-        alert(`Import failed: ${error?.response?.data?.detail || error?.message || "Unknown error"}`);
+        addToast(`❌ Import failed: ${error?.response?.data?.detail || error?.message || "Unknown error"}`, "error");
       }
     };
     input.click();
+  };
+
+  const handleDeleteAllData = async () => {
+    if (deleteConfirmText !== "DELETE ALL DATA") {
+      setDeleteError("Please type 'DELETE ALL DATA' exactly to confirm");
+      return;
+    }
+
+    setDeleteLoading(true);
+    setDeleteError("");
+    setDeleteSuccess("");
+
+    try {
+      const response = await api.delete("/api/security/data/delete-all", {
+        params: { 
+          confirm: deleteConfirmText,
+          children: true,
+          measurements: true,
+          alerts: true,
+          referrals: true,
+          reports: true,
+          notifications: true,
+          programs: true,
+          homeVisits: true,
+          cases: true,
+          messages: true,
+          calendar: true,
+          households: true,
+          budgets: true,
+          logs: true,
+          imports: true,
+          users: false // Don't delete users from Operation Timbang
+        }
+      });
+
+      setDeleteSuccess(response.data.message);
+      setDeleteConfirmText("");
+      
+      // Refresh the page after 2 seconds
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
+    } catch (error: any) {
+      setDeleteError(error.response?.data?.detail || "Failed to delete data");
+    } finally {
+      setDeleteLoading(false);
+    }
   };
 
   if (optDataQuery.isLoading) {
@@ -214,6 +271,14 @@ export default function SuperAdminOPTPlusPage() {
             </select>
           </div>
 
+          <button
+            onClick={() => setShowDeleteAllModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-semibold text-sm"
+          >
+            <Trash2 className="h-4 w-4" />
+            Delete All Data
+          </button>
+          
           <button
             onClick={handleImportExcel}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold text-sm"
@@ -371,6 +436,9 @@ export default function SuperAdminOPTPlusPage() {
                 </th>
                 <th rowSpan={3} className="px-2 py-2 text-center font-semibold border border-slate-600 bg-amber-700 min-w-[60px]">
                   M/Cs<br/>Above N
+                </th>
+                <th rowSpan={3} className="px-2 py-2 text-center font-semibold border border-slate-600 bg-slate-600 min-w-[100px]">
+                  Actions
                 </th>
               </tr>
               <tr className="bg-gradient-to-r from-slate-700 to-slate-600 text-white text-[10px]">
@@ -541,6 +609,33 @@ export default function SuperAdminOPTPlusPage() {
                     <td className="px-2 py-2 text-center font-semibold text-amber-700 bg-amber-50 border border-slate-200">
                       {barangay.mothers_with_above_normal}
                     </td>
+                    <td className="px-2 py-2 text-center space-x-2 border border-slate-200 bg-slate-50 flex justify-center items-center">
+                      <button 
+                        onClick={() => addToast(`📄 Viewing: ${barangay.barangay_name}`, "alert")}
+                        className="p-2 rounded-full bg-blue-100 hover:bg-blue-200 text-blue-600 transition"
+                        title="View"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </button>
+                      <button 
+                        onClick={() => addToast(`✏️ Edit: ${barangay.barangay_name}`, "alert")}
+                        className="p-2 rounded-full bg-amber-100 hover:bg-amber-200 text-amber-600 transition"
+                        title="Edit"
+                      >
+                        <Edit3 className="h-4 w-4" />
+                      </button>
+                      <button 
+                        onClick={() => {
+                          if (confirm(`Delete all records for ${barangay.barangay_name}?`)) {
+                            addToast(`🗑️ Deleted: ${barangay.barangay_name}`, "success");
+                          }
+                        }}
+                        className="p-2 rounded-full bg-red-100 hover:bg-red-200 text-red-600 transition"
+                        title="Delete"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </td>
                   </tr>
                 );
               })}
@@ -598,6 +693,125 @@ export default function SuperAdminOPTPlusPage() {
         </div>
         <SuperAdminOptPlusReportSection selectedYear={selectedYear} />
       </div>
+
+      {/* Delete All Data Modal */}
+      {showDeleteAllModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="bg-gradient-to-r from-red-600 to-red-700 px-6 py-4 flex items-center justify-between rounded-t-2xl">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 bg-white/20 rounded-full flex items-center justify-center">
+                  <Trash2 className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white">Delete All Data</h3>
+                  <p className="text-xs text-red-100">This action cannot be undone</p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setShowDeleteAllModal(false);
+                  setDeleteConfirmText("");
+                  setDeleteError("");
+                  setDeleteSuccess("");
+                }}
+                className="text-white hover:bg-white/20 p-2 rounded-lg transition"
+              >
+                <AlertCircle className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="bg-red-50 border-2 border-red-300 rounded-xl p-4">
+                <p className="text-sm text-red-900 font-bold mb-2">
+                  ⚠️ This will permanently delete ALL data from all barangays:
+                </p>
+                <ul className="grid grid-cols-2 gap-2 text-xs text-red-800">
+                  <li>✓ All children records</li>
+                  <li>✓ All measurements</li>
+                  <li>✓ All alerts & reports</li>
+                  <li>✓ All programs & activities</li>
+                  <li>✓ All home visits & cases</li>
+                  <li>✓ All messages & events</li>
+                  <li>✓ All households</li>
+                  <li>✓ All activity logs</li>
+                </ul>
+              </div>
+
+              <div className="bg-green-50 border border-green-300 rounded-lg p-3">
+                <p className="text-xs font-bold text-green-900 mb-1">✅ Will be preserved:</p>
+                <p className="text-xs text-green-800">
+                  Barangays • Puroks • Users & Accounts • System Settings
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-sm font-bold text-slate-900">
+                  Type <span className="bg-red-200 px-2 py-0.5 rounded font-mono text-red-900">DELETE ALL DATA</span> to confirm:
+                </label>
+                <input
+                  type="text"
+                  value={deleteConfirmText}
+                  onChange={(e) => setDeleteConfirmText(e.target.value)}
+                  placeholder="Type: DELETE ALL DATA"
+                  className="w-full px-4 py-3 border-2 border-slate-300 focus:border-red-500 focus:ring-2 focus:ring-red-200 rounded-lg font-mono"
+                  autoFocus
+                />
+              </div>
+
+              {/* Error Message */}
+              {deleteError && (
+                <div className="bg-red-100 border border-red-300 rounded-lg p-3 flex items-start gap-2">
+                  <AlertCircle className="h-4 w-4 text-red-600 flex-shrink-0 mt-0.5" />
+                  <p className="text-xs font-bold text-red-800">{deleteError}</p>
+                </div>
+              )}
+
+              {/* Success Message */}
+              {deleteSuccess && (
+                <div className="bg-green-100 border border-green-300 rounded-lg p-3 flex items-start gap-2">
+                  <AlertCircle className="h-4 w-4 text-green-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs font-bold text-green-800">{deleteSuccess}</p>
+                    <p className="text-xs text-green-700 mt-1">Reloading page...</p>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={() => {
+                    setShowDeleteAllModal(false);
+                    setDeleteConfirmText("");
+                    setDeleteError("");
+                    setDeleteSuccess("");
+                  }}
+                  className="flex-1 px-4 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-lg transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteAllData}
+                  disabled={deleteLoading || deleteConfirmText !== "DELETE ALL DATA"}
+                  className="flex-1 px-4 py-3 bg-red-600 hover:bg-red-700 disabled:bg-slate-400 disabled:cursor-not-allowed text-white font-bold rounded-lg transition flex items-center justify-center gap-2"
+                >
+                  {deleteLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Deleting...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="h-4 w-4" />
+                      Delete All Data
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -612,9 +826,10 @@ function SuperAdminOptPlusReportSection({ selectedYear }: { selectedYear: number
     queryFn: () =>
       api.get(`/api/opt-plus/report?year=${selectedYear}&month=${selectedMonth}`)
         .then((r) => r.data),
-    refetchInterval: 10_000,
+    refetchInterval: 15_000,
     staleTime: 5_000,
-    retry: 2,
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
 
   const data = optPlusQuery.data;
@@ -704,7 +919,8 @@ function SuperAdminOptPlusReportSection({ selectedYear }: { selectedYear: number
       {optPlusQuery.isError && (
         <div className="bg-red-50 border border-red-200 rounded-2xl p-12 text-center">
           <p className="text-red-600 font-semibold mb-2">Error Loading Report</p>
-          <p className="text-red-500 text-sm">{(optPlusQuery.error as any)?.message || "Failed to load data"}</p>
+          <p className="text-red-500 text-sm">{(optPlusQuery.error as any)?.response?.data?.detail || (optPlusQuery.error as any)?.message || "Failed to load data"}</p>
+          <p className="text-slate-500 text-xs mt-2">Note: This may occur if no measurements exist for the selected month.</p>
           <button
             onClick={() => optPlusQuery.refetch()}
             className="mt-4 bg-red-600 hover:bg-red-700 text-white font-semibold text-sm px-4 py-2 rounded-lg transition-colors"

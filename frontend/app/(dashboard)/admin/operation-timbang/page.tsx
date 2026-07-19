@@ -60,23 +60,17 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
       });
 
       setResult(response.data);
-      queryClient.invalidateQueries({ queryKey: ["operation-timbang"] });
       
-      // Force immediate refetch
-      setTimeout(() => {
-        queryClient.refetchQueries({ queryKey: ["operation-timbang"] });
-      }, 100);
+      // Clear all related caches and force a hard refetch
+      await queryClient.invalidateQueries({ queryKey: ["operation-timbang"], exact: false });
+      
+      // Hard refetch after a brief delay to ensure database is updated
+      setTimeout(async () => {
+        await queryClient.refetchQueries({ queryKey: ["operation-timbang"] });
+      }, 500);
       
       onSuccess();
-      
-      // Show success message
-      setTimeout(() => {
-        alert(`✓ Import complete!\nImported: ${response.data.imported} records\nErrors: ${response.data.errors}`);
-        if (response.data.error_details?.length > 0) {
-          alert("Errors:\n" + response.data.error_details.slice(0, 3).join("\n"));
-        }
-        onClose();
-      }, 500);
+      onClose();
     } catch (error: any) {
       alert(`Import failed: ${error?.response?.data?.detail || error?.message}`);
     } finally {
@@ -87,9 +81,9 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
   const downloadTemplate = async () => {
     try {
       const sampleData = [
-        ["full_name", "birth_date", "sex", "measurement_date", "weight_kg", "height_cm", "muac_cm", "notes"],
-        ["John Doe", "2020-01-15", "M", "2024-01-15", "12.5", "85.5", "", "Healthy"],
-        ["Maria Santos", "2019-06-20", "F", "2024-01-15", "13.2", "88.0", "14.5", ""],
+        ["full_name", "birth_date", "sex", "measurement_date", "weight_kg", "height_cm", "muac_cm", "notes", "child_id", "address", "latitude", "longitude", "guardian_name", "purok_id", "barangay_id"],
+        ["John Doe", "2020-01-15", "M", "2024-01-15", "12.5", "85.5", "", "Healthy", "", "123 Main St, Barangay Sample", "8.9483", "125.5282", "Jane Doe (Mother)", "", ""],
+        ["Maria Santos", "2019-06-20", "F", "2024-01-15", "13.2", "88.0", "14.5", "", "", "456 Oak Ave, Barangay Sample", "8.9490", "125.5290", "Rosa Santos (Mother)", "", ""],
       ];
 
       const csv = sampleData.map(row => row.join(",")).join("\n");
@@ -136,8 +130,9 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
                   <li>Create an Excel or CSV file with required columns</li>
                   <li>Date format: YYYY-MM-DD (e.g., 2020-01-15)</li>
                   <li>Sex: M for Male, F for Female</li>
-                  <li>Children must already exist in the system</li>
+                  <li><strong>Children not in system will be auto-created</strong> (requires columns 10-15)</li>
                   <li>Age must be between 0-71 months for OPT Plus</li>
+                  <li>Download the template for the correct column order</li>
                 </ul>
               </div>
 
@@ -238,16 +233,43 @@ function ImportModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
 
                   {/* Error Details */}
                   {result.error_details?.length > 0 && (
-                    <div className="mt-4 bg-white rounded-lg p-3 max-h-40 overflow-y-auto border border-red-200">
-                      <p className="text-xs font-bold text-slate-700 mb-2">❌ Error Details:</p>
-                      <ul className="space-y-1 text-xs text-slate-600">
-                        {result.error_details.map((err: string, i: number) => (
-                          <li key={i} className="flex gap-2">
-                            <span className="text-red-500 font-bold">•</span>
-                            <span>{err}</span>
-                          </li>
-                        ))}
-                      </ul>
+                    <div className="mt-4 bg-white rounded-lg p-3 max-h-60 overflow-y-auto border border-red-200">
+                      <p className="text-xs font-bold text-slate-700 mb-3">❌ Error Details ({result.error_details.length} total errors):</p>
+                      
+                      {/* Show categorized errors if available */}
+                      {result.error_categories && Object.keys(result.error_categories).length > 0 ? (
+                        <div className="space-y-3">
+                          {Object.entries(result.error_categories).map(([category, categoryErrors]: [string, any]) => (
+                            <div key={category} className="border-l-2 border-red-300 pl-3">
+                              <p className="text-xs font-bold text-red-600 mb-1">
+                                {category} ({categoryErrors.length} errors)
+                              </p>
+                              <ul className="space-y-1 text-xs text-slate-600">
+                                {categoryErrors.slice(0, 5).map((err: string, i: number) => (
+                                  <li key={i} className="flex gap-2">
+                                    <span className="text-red-500 font-bold">•</span>
+                                    <span>{err}</span>
+                                  </li>
+                                ))}
+                                {categoryErrors.length > 5 && (
+                                  <li className="text-xs text-slate-500 italic ml-4">
+                                    ... and {categoryErrors.length - 5} more {category} errors
+                                  </li>
+                                )}
+                              </ul>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <ul className="space-y-1 text-xs text-slate-600">
+                          {result.error_details.map((err: string, i: number) => (
+                            <li key={i} className="flex gap-2">
+                              <span className="text-red-500 font-bold">•</span>
+                              <span>{err}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
                     </div>
                   )}
                 </div>
@@ -814,6 +836,40 @@ export default function OperationTimbangPage() {
     },
   });
 
+  const deleteAllMutation = useMutation({
+    mutationFn: () => api.delete("/api/operation-timbang/bulk/delete-all"),
+    onSuccess: (response) => {
+      queryClient.invalidateQueries({ queryKey: ["operation-timbang"] });
+      const data = response.data;
+      alert(`✓ Successfully deleted all records!\n\nDeleted: ${data.deleted_count} records\nScope: ${data.user_role === "super_admin" ? "All barangays" : `Barangay ${user?.barangay_name}`}`);
+    },
+    onError: (error: any) => {
+      alert(`Error: ${error?.response?.data?.detail || error?.message || "Failed to delete all records"}`);
+    },
+  });
+
+  const handleDeleteAll = () => {
+    const scope = user?.role === "super_admin" ? "ALL BARANGAYS in the system" : `your barangay (${user?.barangay_name})`;
+    const confirmMessage = `⚠️ CRITICAL WARNING ⚠️\n\nYou are about to DELETE ALL Operation Timbang records for ${scope}.\n\n` +
+      `This will permanently remove:\n` +
+      `• All measurement records\n` +
+      `• All assessment data\n` +
+      `• All nutritional status information\n\n` +
+      `❌ THIS ACTION CANNOT BE UNDONE! ❌\n\n` +
+      `Type "DELETE ALL" to confirm this action.`;
+    
+    const userInput = prompt(confirmMessage);
+    
+    if (userInput === "DELETE ALL") {
+      const finalConfirm = confirm(`Are you absolutely sure? This will delete ALL records for ${scope}.`);
+      if (finalConfirm) {
+        deleteAllMutation.mutate();
+      }
+    } else if (userInput !== null) {
+      alert("Delete cancelled - confirmation text did not match.");
+    }
+  };
+
   const calculateAge = (birthDate: string) => {
     if (!birthDate) return 0;
     const birth = new Date(birthDate);
@@ -1043,11 +1099,29 @@ export default function OperationTimbangPage() {
           <p className="text-sm mt-1">Nutritional Assessment & Monitoring Tool</p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => setShowImport(true)} className="admin-action-btn-primary flex items-center gap-2 px-4 py-2.5 text-xs">
+          <button 
+            onClick={() => setShowImport(true)} 
+            className="admin-action-btn-primary flex items-center gap-2 px-4 py-2.5 text-xs"
+          >
             <Upload className="h-4 w-4" /> Import Data
           </button>
-          <button onClick={() => setTab("add")} className="admin-action-btn-secondary flex items-center gap-2 px-4 py-2.5 text-xs">
+          <button 
+            onClick={() => setTab("add")} 
+            className="admin-action-btn-secondary flex items-center gap-2 px-4 py-2.5 text-xs"
+          >
             <Plus className="h-4 w-4" /> Add Record
+          </button>
+          <button 
+            onClick={handleDeleteAll}
+            disabled={deleteAllMutation.isPending}
+            className="flex items-center gap-2 px-4 py-2.5 text-xs font-semibold bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {deleteAllMutation.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Trash2 className="h-4 w-4" />
+            )}
+            Delete All
           </button>
         </div>
       </div>

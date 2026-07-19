@@ -389,6 +389,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { label: "Analytics", href: "/analytics", icon: ChartLine },
     { label: "Messaging Center", href: "/messaging", icon: MessageSquare },
     { label: "Nutrition Calendar", href: "/nutrition-calendar", icon: Calendar },
+    { label: "Operation Timbang", href: "/admin/operation-timbang", icon: Weight },
   ];
 
   const superAdminMenuItems: NavItem[] = [
@@ -401,8 +402,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { label: "Analytics", href: "/analytics", icon: ChartLine },
     { label: "Messaging Center", href: "/messaging", icon: MessageSquare },
     { label: "Nutrition Calendar", href: "/nutrition-calendar", icon: Calendar },
+    { label: "Operation Timbang", href: "/admin/operation-timbang", icon: Weight },
     { label: "Barangay Mgmt & Monitoring", href: "/admin/barangays", icon: Building2 },
-    { label: "Operation Timbang Plus", href: "/admin/operation-timbang", icon: Weight },
     { label: "Activity Logs", href: "/admin/logs", icon: Activity },
     { label: "System Settings", href: "/admin/settings", icon: Settings },
   ];
@@ -413,7 +414,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const adminNav: NavItem[] = [
     { label: "Purok Mgmt & Monitoring", href: "/admin/puroks", icon: MapPin },
-    { label: "Operation Timbang Plus", href: "/admin/operation-timbang", icon: Weight },
     { label: "Activity Logs", href: "/admin/logs", icon: Activity },
     { label: "System Settings", href: "/admin/settings", icon: Settings },
   ];

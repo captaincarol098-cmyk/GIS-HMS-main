@@ -1,5 +1,6 @@
 "use client";
 import "@/styles/admin.css";
+import "@/styles/analytics.css";
 
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";

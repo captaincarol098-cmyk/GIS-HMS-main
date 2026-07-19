@@ -1,5 +1,6 @@
 "use client";
 import "@/styles/admin.css";
+import "@/styles/analytics.css";
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -16,7 +17,6 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, BarChart, Bar, Legend, AreaChart, Area
 } from "recharts";
-import { NutritionalStatusAnalytics } from "./NutritionalStatusAnalytics";
 
 interface AdminAnalyticsProps {
   selectedYear: number;
@@ -103,8 +103,8 @@ export function AdminAnalytics({
       {/* Main Charts Grid - Barangay Level */}
       <div className="grid gap-6 md:grid-cols-2 auto-rows-max">
         {/* Card 1: Malnutrition Trend (Monthly) */}
-        <div className="admin-glass-panel p-5 h-[320px] flex flex-col">
-          <h3 className="text-sm font-extrabold text-slate-800 tracking-tight mb-4">
+        <div className="chart-container h-[320px] flex flex-col">
+          <h3 className="chart-title text-sm tracking-tight mb-4">
             Malnutrition Trend (Monthly)
           </h3>
           <div className="flex-1 min-h-0 w-full">
@@ -124,8 +124,8 @@ export function AdminAnalytics({
         </div>
 
         {/* Card 2: Nutritional Status Distribution */}
-        <div className="admin-glass-panel p-5 h-[320px] flex flex-col">
-          <h3 className="text-sm font-extrabold text-slate-800 tracking-tight mb-2">
+        <div className="chart-container h-[320px] flex flex-col">
+          <h3 className="chart-title text-sm tracking-tight mb-2">
             Nutritional Status Distribution
           </h3>
           <div className="relative flex-1 min-h-0 flex items-center justify-center">
@@ -163,8 +163,8 @@ export function AdminAnalytics({
         </div>
 
         {/* Card 3: Age Group Analysis with Multi-Color Bars */}
-        <div className="admin-glass-panel p-5 h-auto flex flex-col">
-          <h3 className="text-sm font-extrabold text-slate-800 tracking-tight mb-4">
+        <div className="chart-container h-auto flex flex-col">
+          <h3 className="chart-title text-sm tracking-tight mb-4">
             Age Group Analysis
           </h3>
           <div className="h-[280px] w-full">
@@ -200,8 +200,8 @@ export function AdminAnalytics({
         </div>
 
         {/* Card 4: Demographic Breakdown - beside Age Group Analysis */}
-        <div className="admin-glass-panel p-5 h-auto flex flex-col justify-between">
-          <h3 className="text-sm font-extrabold text-slate-800 tracking-tight border-b border-slate-100 pb-2.5">
+        <div className="chart-container h-auto flex flex-col justify-between">
+          <h3 className="chart-title text-sm tracking-tight pb-2.5">
             Demographic Breakdown
           </h3>
           <div className="grid grid-cols-2 items-center flex-1 mt-3">
@@ -249,9 +249,9 @@ export function AdminAnalytics({
         </div>
 
         {/* Card 5: Predictive Forecast Chart */}
-        <div className="col-span-full admin-glass-panel p-5">
+        <div className="col-span-full chart-container">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-extrabold text-slate-800 tracking-tight">
+            <h3 className="chart-title text-sm tracking-tight">
               Predictive Forecast Chart (Next 3 Months)
             </h3>
             <button
@@ -299,15 +299,6 @@ export function AdminAnalytics({
             </>
           )}
         </div>
-      </div>
-
-      {/* Nutritional Status Analytics Section */}
-      <div className="admin-glass-panel p-6 border-l-4 border-l-blue-500">
-        <div className="flex items-center gap-3 mb-6">
-          <Zap className="h-6 w-6 text-blue-600" />
-          <h2 className="text-lg font-extrabold text-slate-900">📊 Nutritional Status Analytics (Operation Timbang)</h2>
-        </div>
-        <NutritionalStatusAnalytics selectedYear={selectedYear} />
       </div>
     </div>
   );

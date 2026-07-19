@@ -26,30 +26,61 @@ logger.info("=== FastAPI Application Starting ===")
 logger.info(f"Database: {app_settings.database_url}")
 logger.info(f"Frontend URL: {app_settings.frontend_url}")
 
-# Add CORS middleware - MUST be before any other middleware
-# NOTE: Cannot use wildcard "*" with credentials=True
+# CORS Configuration - CRITICAL: Must be the LAST middleware added (runs first)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",
-        "http://localhost:3001",
-        "http://localhost:8888",
-        "http://127.0.0.1:3000",
+        "http://localhost:3001", 
         "http://127.0.0.1:3001",
-        "http://127.0.0.1:8888",
-        "http://localhost:8000",  # Added backend itself
-        "http://127.0.0.1:8000",  # Added backend itself
+        app_settings.frontend_url
     ],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],  # Be explicit
-    allow_headers=["*"],  # Allow all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
     expose_headers=["*"],
-    max_age=3600,  # Cache preflight for 1 hour
 )
 
-logger.info("CORS middleware configured for origins:")
-logger.info("  - http://localhost:3000, http://localhost:3001, http://localhost:8888")
-logger.info("  - http://127.0.0.1:3000, http://127.0.0.1:3001, http://127.0.0.1:8888")
+logger.info("✓ CORS middleware configured")
+logger.info(f"  Allowed origins: localhost:3000, localhost:3001, {app_settings.frontend_url}")
+
+# Global exception handler to ensure CORS headers on errors
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Catch all exceptions and ensure CORS headers are present"""
+    logger.error(f"Unhandled exception: {exc}", exc_info=True)
+    
+    response = JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error", "error": str(exc)}
+    )
+    
+    # Add CORS headers
+    origin = request.headers.get("origin", "")
+    if origin:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Allow-Methods"] = "*"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+    
+    return response
+
+# Handle HTTPExceptions with CORS
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    """Handle HTTPException with CORS headers"""
+    response = JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail}
+    )
+    
+    # Add CORS headers
+    origin = request.headers.get("origin", "")
+    if origin:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+    
+    return response
 
 @app.on_event("startup")
 async def startup():
@@ -61,6 +92,12 @@ async def startup():
 @app.get("/api/health")
 async def health():
     return {"status": "ok", "cors": "enabled"}
+
+
+@app.options("/{full_path:path}")
+async def options_handler(full_path: str):
+    """Handle CORS preflight requests"""
+    return JSONResponse(content={}, status_code=200)
 
 
 @app.websocket("/ws")

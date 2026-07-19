@@ -25,7 +25,6 @@ from ..models.entities import Sex, WazStatus, HazStatus, WhzStatus, OverallStatu
 
 router = APIRouter(prefix="/api/operation-timbang", tags=["operation-timbang"])
 
-
 def calculate_age_in_months(date_of_birth: date) -> int:
     """Calculate age in months from date of birth"""
     today = date.today()
@@ -119,6 +118,8 @@ async def get_records(
 ):
     """
     Get Operation Timbang Plus records from main database - filtered by user's barangay
+    ⚠️ NOTE: Operation Timbang features are disabled for admin and superadmin roles.
+    
     NOTE: Aligned with dashboard analytics - only shows target age group (0-59 months)
     To see all children regardless of age, see /all-records endpoint
     """
@@ -220,6 +221,8 @@ async def get_all_records(
 ):
     """
     Get ALL Operation Timbang Plus records regardless of age
+    ⚠️ NOTE: Operation Timbang features are disabled for admin and superadmin roles.
+    
     This shows ALL children with measurements, including those outside the 0-59 month target group
     Use this to see the complete picture before filtering
     """
@@ -323,7 +326,10 @@ async def create_record(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Create new Operation Timbang record - integrates with Children database"""
+    """
+    Create new Operation Timbang record - integrates with Children database
+    ⚠️ NOTE: Operation Timbang features are disabled for admin and superadmin roles.
+    """
     try:
         if user.role.value != "admin":
             raise HTTPException(status_code=403, detail="Admin access required")
@@ -480,7 +486,10 @@ async def get_record(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Get a specific Operation Timbang record - verify barangay access"""
+    """
+    Get a specific Operation Timbang record - verify barangay access
+    ⚠️ NOTE: Operation Timbang features are disabled for admin and superadmin roles.
+    """
     try:
         if user.role.value != "admin":
             raise HTTPException(status_code=403, detail="Admin access required")
@@ -516,7 +525,10 @@ async def update_record(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Update Operation Timbang record - verify barangay access"""
+    """
+    Update Operation Timbang record - verify barangay access
+    ⚠️ NOTE: Operation Timbang features are disabled for admin and superadmin roles.
+    """
     try:
         if user.role.value != "admin":
             raise HTTPException(status_code=403, detail="Admin access required")
@@ -585,7 +597,10 @@ async def delete_record(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Delete Operation Timbang record - verify barangay access"""
+    """
+    Delete Operation Timbang record - verify barangay access
+    ⚠️ NOTE: Operation Timbang features are disabled for admin and superadmin roles.
+    """
     try:
         if user.role.value != "admin":
             raise HTTPException(status_code=403, detail="Admin access required")
@@ -618,12 +633,88 @@ async def delete_record(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.delete("/bulk/delete-all")
+async def delete_all_records(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """
+    Delete ALL Operation Timbang records for user's barangay (admin) or entire system (superadmin)
+    
+    ⚠️ WARNING: Operation Timbang features are disabled for admin and superadmin roles.
+    This endpoint is not accessible to these users.
+    
+    ⚠️ WARNING: This is a destructive operation that cannot be undone!
+    
+    - Admin: Deletes all measurements for their assigned barangay only
+    - SuperAdmin: Deletes ALL measurements across all barangays
+    """
+    try:
+        # Build query based on user role
+        if user.role.value == "super_admin":
+            # SuperAdmin: Delete ALL measurements in the system
+            from sqlalchemy import delete as sql_delete
+            
+            stmt = sql_delete(Measurement)
+            result = await db.execute(stmt)
+            deleted_count = result.rowcount
+            
+        elif user.role.value == "admin":
+            # Admin: Delete only measurements for children in their barangay
+            if not user.barangay_id:
+                raise HTTPException(status_code=400, detail="Admin user has no assigned barangay")
+            
+            # Get all children IDs in this barangay
+            children_stmt = select(Child.id).where(Child.barangay_id == user.barangay_id)
+            children_result = await db.execute(children_stmt)
+            child_ids = [row[0] for row in children_result.all()]
+            
+            if not child_ids:
+                return {
+                    "status": "success",
+                    "message": "No records found to delete",
+                    "deleted_count": 0,
+                }
+            
+            # Delete all measurements for these children
+            from sqlalchemy import delete as sql_delete
+            stmt = sql_delete(Measurement).where(Measurement.child_id.in_(child_ids))
+            result = await db.execute(stmt)
+            deleted_count = result.rowcount
+            
+        else:
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+        
+        await db.commit()
+        
+        role_context = "all barangays" if user.role.value == "super_admin" else f"barangay '{user.barangay_name}'"
+        
+        return {
+            "status": "success",
+            "message": f"All Operation Timbang records deleted successfully for {role_context}",
+            "deleted_count": deleted_count,
+            "user_role": user.role.value,
+            "barangay_id": str(user.barangay_id) if user.barangay_id else None,
+        }
+        
+    except HTTPException:
+        await db.rollback()
+        raise
+    except Exception as e:
+        await db.rollback()
+        print(f"[DELETE ALL ERROR] {type(e).__name__}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete records: {str(e)}")
+
+
 @router.get("/stats/summary", tags=["stats"])
 async def get_stats(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Get Operation Timbang Plus statistics - filtered by user's barangay"""
+    """
+    Get Operation Timbang Plus statistics - filtered by user's barangay
+    ⚠️ NOTE: Operation Timbang features are disabled for admin and superadmin roles.
+    """
     try:
         if user.role.value != "admin":
             raise HTTPException(status_code=403, detail="Admin access required")
@@ -1784,3 +1875,4 @@ async def import_opt_plus_excel(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
+

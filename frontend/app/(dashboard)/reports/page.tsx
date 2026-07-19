@@ -23,7 +23,7 @@ function formatDate(d: string) {
 export default function ReportsPage() {
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<"comprehensive" | "quick" | "saved" | "opt-plus">("comprehensive");
+  const [activeTab, setActiveTab] = useState<"comprehensive" | "quick" | "saved">("comprehensive");
   const [isSaving, setIsSaving] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [genError, setGenError] = useState("");
@@ -831,18 +831,6 @@ export default function ReportsPage() {
         >
           Saved Reports
         </button>
-        {user?.role === "super_admin" && (
-          <button
-            onClick={() => setActiveTab("opt-plus")}
-            className={`px-4 py-2 text-sm font-bold rounded-t-lg border-b-2 transition-colors flex items-center gap-2 ${
-              activeTab === "opt-plus"
-                ? "text-emerald-600 border-emerald-600 bg-emerald-50"
-                : "text-slate-500 border-transparent hover:text-slate-700 hover:bg-slate-50"
-            }`}
-          >
-            📊 OPT Plus Report
-          </button>
-        )}
       </div>
 
       {/* COMPREHENSIVE REPORT TAB - REAL-TIME AUTO-UPDATING */}
@@ -924,13 +912,6 @@ export default function ReportsPage() {
             </div>
           )}
         </>
-      )}
-
-      {/* OPT PLUS REPORT TAB - SuperAdmin Only */}
-      {activeTab === "opt-plus" && user?.role === "super_admin" && (
-        <div className="bg-white border border-slate-200 rounded-b-2xl overflow-hidden">
-          <OptPlusReportTableSection />
-        </div>
       )}
     </div>
   );

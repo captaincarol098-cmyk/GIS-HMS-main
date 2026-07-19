@@ -14,7 +14,9 @@ import {
   CheckCircle,
   HelpCircle,
   Save,
-  Loader2
+  Loader2,
+  Trash2,
+  AlertTriangle
 } from "lucide-react";
 
 export default function SettingsPage() {
@@ -40,6 +42,53 @@ export default function SettingsPage() {
   const [enableForecast, setEnableForecast] = useState(true);
   const [enableAlert, setEnableAlert] = useState(true);
   const [saveMessage, setSaveMessage] = useState("");
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+  const [deleteSuccess, setDeleteSuccess] = useState("");
+  
+  // Checklist for what to delete
+  const [deleteOptions, setDeleteOptions] = useState({
+    children: true,
+    measurements: true,
+    alerts: true,
+    referrals: true,
+    reports: true,
+    notifications: true,
+    programs: true,
+    homeVisits: true,
+    cases: true,
+    messages: true,
+    calendar: true,
+    households: true,
+    budgets: true,
+    logs: true,
+    imports: true,
+    users: false // Admin users - default to false for safety
+  });
+
+  const toggleAllDelete = (checked: boolean) => {
+    setDeleteOptions({
+      children: checked,
+      measurements: checked,
+      alerts: checked,
+      referrals: checked,
+      reports: checked,
+      notifications: checked,
+      programs: checked,
+      homeVisits: checked,
+      cases: checked,
+      messages: checked,
+      calendar: checked,
+      households: checked,
+      budgets: checked,
+      logs: checked,
+      imports: checked,
+      users: checked
+    });
+  };
+
+  const isAnySelected = Object.values(deleteOptions).some(v => v);
 
   const { data: settingsData } = useQuery({
     queryKey: ["settings"],
@@ -90,12 +139,55 @@ export default function SettingsPage() {
       .finally(() => setTimeout(() => setSaveMessage(""), 3000));
   };
 
+  const handleDeleteAllData = async () => {
+    if (deleteConfirmText !== "DELETE ALL DATA") {
+      setDeleteError("Please type 'DELETE ALL DATA' exactly to confirm");
+      return;
+    }
+
+    if (!isAnySelected) {
+      setDeleteError("Please select at least one data type to delete");
+      return;
+    }
+
+    setDeleteLoading(true);
+    setDeleteError("");
+    setDeleteSuccess("");
+
+    try {
+      const response = await api.delete("/api/security/data/delete-all", {
+        params: { 
+          confirm: deleteConfirmText,
+          ...deleteOptions // Send the checklist options
+        }
+      });
+
+      setDeleteSuccess(response.data.message);
+      setDeleteConfirmText("");
+      
+      // Show detailed results
+      const counts = response.data.deleted_counts;
+      const total = Object.values(counts).reduce((sum: number, val: any) => sum + val, 0);
+      console.log("Deleted counts:", counts);
+      console.log("Total deleted:", total);
+      
+      // Refresh the page after 3 seconds
+      setTimeout(() => {
+        window.location.reload();
+      }, 3000);
+    } catch (error: any) {
+      setDeleteError(error.response?.data?.detail || "Failed to delete data");
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
   const tabs = [
     { id: "general", label: "General Settings", icon: SettingsIcon },
     { id: "algorithm", label: "Algorithm Settings", icon: Sliders },
     { id: "notification", label: "Notification Settings", icon: Bell },
     { id: "gis", label: "GIS Settings", icon: MapPin },
-    { id: "backup", label: "Backup & Restore", icon: Database },
+    { id: "data", label: "Data Management", icon: Database },
     { id: "logs", label: "Activity Logs", icon: Activity }
   ];
 
@@ -623,31 +715,309 @@ export default function SettingsPage() {
                 </div>
               )}
 
-              {/* BACKUP & RESTORE TAB */}
-              {activeTab === "backup" && (
+              {/* DATA MANAGEMENT TAB */}
+              {activeTab === "data" && (
                 <div className="admin-container space-y-6">
                   <div className="border-b border-slate-100 pb-3">
-                    <h3 className="text-sm font-extrabold text-slate-800 tracking-tight">Backup & Restore</h3>
-                    <p className="text-xs text-slate-450 mt-0.5">Manage system backups and data recovery.</p>
+                    <h3 className="text-sm font-extrabold text-slate-800 tracking-tight">Data Management</h3>
+                    <p className="text-xs text-slate-450 mt-0.5">Manage system data and perform bulk operations.</p>
                   </div>
 
+                  {/* Delete All Data Section */}
+                  <div className="bg-red-50 border-2 border-red-300 rounded-xl p-6 space-y-4">
+                    <div className="flex items-start gap-3">
+                      <div className="h-10 w-10 rounded-lg bg-red-100 flex items-center justify-center flex-shrink-0">
+                        <AlertTriangle className="h-5 w-5 text-red-600" />
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="text-sm font-extrabold text-red-900">⚠️ Delete All Data (Super Admin Only)</h4>
+                        <p className="text-xs text-red-700 mt-2 leading-relaxed">
+                          This action will permanently delete selected data from all barangays. 
+                          <span className="font-bold block mt-1">Select what you want to delete:</span>
+                        </p>
+                        
+                        {/* Select All Checkbox */}
+                        <div className="bg-white border-2 border-red-300 rounded-lg p-3 mt-3">
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={Object.values(deleteOptions).every(v => v)}
+                              onChange={(e) => toggleAllDelete(e.target.checked)}
+                              className="h-5 w-5 rounded border-red-300 text-red-600 focus:ring-red-500"
+                            />
+                            <span className="text-sm font-bold text-red-900">Select / Deselect All</span>
+                          </label>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-2 mt-3 text-xs">
+                          <label className="bg-white border border-red-200 rounded-lg p-2.5 cursor-pointer hover:bg-red-50 transition-colors flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={deleteOptions.children}
+                              onChange={(e) => setDeleteOptions({...deleteOptions, children: e.target.checked})}
+                              className="h-4 w-4 rounded border-red-300 text-red-600 focus:ring-red-500"
+                            />
+                            <span className="font-bold text-red-800">Children records</span>
+                          </label>
+                          
+                          <label className="bg-white border border-red-200 rounded-lg p-2.5 cursor-pointer hover:bg-red-50 transition-colors flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={deleteOptions.measurements}
+                              onChange={(e) => setDeleteOptions({...deleteOptions, measurements: e.target.checked})}
+                              className="h-4 w-4 rounded border-red-300 text-red-600 focus:ring-red-500"
+                            />
+                            <span className="font-bold text-red-800">Measurements</span>
+                          </label>
+                          
+                          <label className="bg-white border border-red-200 rounded-lg p-2.5 cursor-pointer hover:bg-red-50 transition-colors flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={deleteOptions.alerts}
+                              onChange={(e) => setDeleteOptions({...deleteOptions, alerts: e.target.checked})}
+                              className="h-4 w-4 rounded border-red-300 text-red-600 focus:ring-red-500"
+                            />
+                            <span className="font-bold text-red-800">Alerts</span>
+                          </label>
+                          
+                          <label className="bg-white border border-red-200 rounded-lg p-2.5 cursor-pointer hover:bg-red-50 transition-colors flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={deleteOptions.notifications}
+                              onChange={(e) => setDeleteOptions({...deleteOptions, notifications: e.target.checked})}
+                              className="h-4 w-4 rounded border-red-300 text-red-600 focus:ring-red-500"
+                            />
+                            <span className="font-bold text-red-800">Notifications</span>
+                          </label>
+                          
+                          <label className="bg-white border border-red-200 rounded-lg p-2.5 cursor-pointer hover:bg-red-50 transition-colors flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={deleteOptions.reports}
+                              onChange={(e) => setDeleteOptions({...deleteOptions, reports: e.target.checked})}
+                              className="h-4 w-4 rounded border-red-300 text-red-600 focus:ring-red-500"
+                            />
+                            <span className="font-bold text-red-800">Reports</span>
+                          </label>
+                          
+                          <label className="bg-white border border-red-200 rounded-lg p-2.5 cursor-pointer hover:bg-red-50 transition-colors flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={deleteOptions.referrals}
+                              onChange={(e) => setDeleteOptions({...deleteOptions, referrals: e.target.checked})}
+                              className="h-4 w-4 rounded border-red-300 text-red-600 focus:ring-red-500"
+                            />
+                            <span className="font-bold text-red-800">Referrals</span>
+                          </label>
+                          
+                          <label className="bg-white border border-red-200 rounded-lg p-2.5 cursor-pointer hover:bg-red-50 transition-colors flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={deleteOptions.programs}
+                              onChange={(e) => setDeleteOptions({...deleteOptions, programs: e.target.checked})}
+                              className="h-4 w-4 rounded border-red-300 text-red-600 focus:ring-red-500"
+                            />
+                            <span className="font-bold text-red-800">Program Activities</span>
+                          </label>
+                          
+                          <label className="bg-white border border-red-200 rounded-lg p-2.5 cursor-pointer hover:bg-red-50 transition-colors flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={deleteOptions.homeVisits}
+                              onChange={(e) => setDeleteOptions({...deleteOptions, homeVisits: e.target.checked})}
+                              className="h-4 w-4 rounded border-red-300 text-red-600 focus:ring-red-500"
+                            />
+                            <span className="font-bold text-red-800">Home Visits</span>
+                          </label>
+                          
+                          <label className="bg-white border border-red-200 rounded-lg p-2.5 cursor-pointer hover:bg-red-50 transition-colors flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={deleteOptions.cases}
+                              onChange={(e) => setDeleteOptions({...deleteOptions, cases: e.target.checked})}
+                              className="h-4 w-4 rounded border-red-300 text-red-600 focus:ring-red-500"
+                            />
+                            <span className="font-bold text-red-800">Cases & History</span>
+                          </label>
+                          
+                          <label className="bg-white border border-red-200 rounded-lg p-2.5 cursor-pointer hover:bg-red-50 transition-colors flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={deleteOptions.messages}
+                              onChange={(e) => setDeleteOptions({...deleteOptions, messages: e.target.checked})}
+                              className="h-4 w-4 rounded border-red-300 text-red-600 focus:ring-red-500"
+                            />
+                            <span className="font-bold text-red-800">Messages</span>
+                          </label>
+                          
+                          <label className="bg-white border border-red-200 rounded-lg p-2.5 cursor-pointer hover:bg-red-50 transition-colors flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={deleteOptions.calendar}
+                              onChange={(e) => setDeleteOptions({...deleteOptions, calendar: e.target.checked})}
+                              className="h-4 w-4 rounded border-red-300 text-red-600 focus:ring-red-500"
+                            />
+                            <span className="font-bold text-red-800">Calendar Events</span>
+                          </label>
+                          
+                          <label className="bg-white border border-red-200 rounded-lg p-2.5 cursor-pointer hover:bg-red-50 transition-colors flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={deleteOptions.households}
+                              onChange={(e) => setDeleteOptions({...deleteOptions, households: e.target.checked})}
+                              className="h-4 w-4 rounded border-red-300 text-red-600 focus:ring-red-500"
+                            />
+                            <span className="font-bold text-red-800">Households</span>
+                          </label>
+                          
+                          <label className="bg-white border border-red-200 rounded-lg p-2.5 cursor-pointer hover:bg-red-50 transition-colors flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={deleteOptions.budgets}
+                              onChange={(e) => setDeleteOptions({...deleteOptions, budgets: e.target.checked})}
+                              className="h-4 w-4 rounded border-red-300 text-red-600 focus:ring-red-500"
+                            />
+                            <span className="font-bold text-red-800">Project Budgets</span>
+                          </label>
+                          
+                          <label className="bg-white border border-red-200 rounded-lg p-2.5 cursor-pointer hover:bg-red-50 transition-colors flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={deleteOptions.logs}
+                              onChange={(e) => setDeleteOptions({...deleteOptions, logs: e.target.checked})}
+                              className="h-4 w-4 rounded border-red-300 text-red-600 focus:ring-red-500"
+                            />
+                            <span className="font-bold text-red-800">Activity Logs</span>
+                          </label>
+                          
+                          <label className="bg-white border border-red-200 rounded-lg p-2.5 cursor-pointer hover:bg-red-50 transition-colors flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={deleteOptions.imports}
+                              onChange={(e) => setDeleteOptions({...deleteOptions, imports: e.target.checked})}
+                              className="h-4 w-4 rounded border-red-300 text-red-600 focus:ring-red-500"
+                            />
+                            <span className="font-bold text-red-800">Import Jobs</span>
+                          </label>
+                          
+                          <label className="bg-orange-100 border-2 border-orange-400 rounded-lg p-2.5 cursor-pointer hover:bg-orange-200 transition-colors flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={deleteOptions.users}
+                              onChange={(e) => setDeleteOptions({...deleteOptions, users: e.target.checked})}
+                              className="h-4 w-4 rounded border-orange-400 text-orange-600 focus:ring-orange-500"
+                            />
+                            <span className="font-bold text-orange-900">Admin Users ⚠️</span>
+                          </label>
+                        </div>
+                        
+                        {/* Warning for users deletion */}
+                        {deleteOptions.users && (
+                          <div className="bg-orange-50 border-2 border-orange-400 rounded-lg p-3 mt-2">
+                            <div className="flex items-start gap-2">
+                              <AlertTriangle className="h-5 w-5 text-orange-600 flex-shrink-0 mt-0.5" />
+                              <div>
+                                <p className="text-xs font-bold text-orange-900">⚠️ Warning: Delete Admin Users Selected!</p>
+                                <p className="text-xs text-orange-800 mt-1">
+                                  This will delete all <span className="font-bold">admin users</span> (BHWs). 
+                                  The current <span className="font-bold">super_admin</span> account will be preserved.
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Selected count display */}
+                        <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-2 mt-3">
+                          <p className="text-xs font-bold text-yellow-900">
+                            ✓ Selected: {Object.values(deleteOptions).filter(v => v).length} of {Object.keys(deleteOptions).length} data types
+                          </p>
+                        </div>
+
+                        <div className="bg-green-50 border border-green-300 rounded-lg p-3 mt-3">
+                          <p className="text-xs font-bold text-green-800 flex items-center gap-2">
+                            <CheckCircle className="h-4 w-4" />
+                            The following will be PRESERVED:
+                          </p>
+                          <div className="grid grid-cols-2 gap-2 mt-2 text-xs">
+                            <p className="text-green-700">✓ Barangays</p>
+                            <p className="text-green-700">✓ Puroks</p>
+                            <p className="text-green-700">✓ Super Admin Account</p>
+                            <p className="text-green-700">✓ System Settings</p>
+                            {!deleteOptions.users && (
+                              <p className="text-green-700 col-span-2">✓ All Admin Users (BHWs)</p>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="bg-white border-2 border-red-300 rounded-lg p-4 mt-4 space-y-3">
+                          <label className="block">
+                            <span className="text-xs font-bold text-red-900 mb-2 block">
+                              Type <span className="bg-red-200 px-2 py-0.5 rounded font-mono">DELETE ALL DATA</span> to confirm:
+                            </span>
+                            <input
+                              type="text"
+                              value={deleteConfirmText}
+                              onChange={(e) => setDeleteConfirmText(e.target.value)}
+                              placeholder="Type: DELETE ALL DATA"
+                              className="w-full px-4 py-2.5 border-2 border-red-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                              disabled={deleteLoading}
+                            />
+                          </label>
+
+                          {deleteError && (
+                            <div className="bg-red-100 border border-red-300 rounded-lg p-3 flex items-start gap-2">
+                              <AlertTriangle className="h-4 w-4 text-red-600 flex-shrink-0 mt-0.5" />
+                              <p className="text-xs font-bold text-red-800">{deleteError}</p>
+                            </div>
+                          )}
+
+                          {deleteSuccess && (
+                            <div className="bg-green-100 border border-green-300 rounded-lg p-3 flex items-start gap-2">
+                              <CheckCircle className="h-4 w-4 text-green-600 flex-shrink-0 mt-0.5" />
+                              <p className="text-xs font-bold text-green-800">{deleteSuccess}</p>
+                            </div>
+                          )}
+
+                          <div className="flex items-center justify-between pt-2">
+                            <p className="text-[10px] text-red-600 font-bold">
+                              ⚠️ This action cannot be undone!
+                            </p>
+                            <button
+                              onClick={handleDeleteAllData}
+                              disabled={deleteLoading || deleteConfirmText !== "DELETE ALL DATA" || !isAnySelected}
+                              className="flex items-center gap-2 px-5 py-2.5 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg text-xs font-bold transition-all shadow-lg"
+                            >
+                              {deleteLoading ? (
+                                <>
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                  Deleting...
+                                </>
+                              ) : (
+                                <>
+                                  <Trash2 className="h-4 w-4" />
+                                  Delete Selected ({Object.values(deleteOptions).filter(v => v).length})
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Info Box */}
                   <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-                    <p className="text-xs text-blue-700 font-bold">💾 Last Backup: 2025-06-28 at 2:30 AM</p>
-                  </div>
-
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <button className="admin-action-btn-secondary p-4 rounded-lg text-left">
-                      <p className="text-xs font-bold text-slate-700">Create Full Backup Now</p>
-                      <p className="text-[10px] text-slate-500 mt-1">Backs up all data, configurations, and files</p>
-                    </button>
-                    <button className="admin-action-btn-secondary p-4 rounded-lg text-left">
-                      <p className="text-xs font-bold text-slate-700">Restore from Backup</p>
-                      <p className="text-[10px] text-slate-500 mt-1">Restore system to a previous state</p>
-                    </button>
-                  </div>
-
-                  <div className="flex justify-end gap-3">
-                    <button className="admin-action-btn-secondary px-5 py-2.5 rounded-lg text-xs">Schedule Automatic Backups</button>
+                    <div className="flex items-start gap-2">
+                      <HelpCircle className="h-4 w-4 text-blue-600 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-xs font-bold text-blue-900">Why would I use this?</p>
+                        <p className="text-xs text-blue-700 mt-1">
+                          This feature is useful for resetting the system for a new operational period (e.g., new year) 
+                          while preserving your organizational structure (barangays, puroks) and user accounts.
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}

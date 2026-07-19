@@ -1,4 +1,5 @@
 "use client";
+import "@/styles/analytics.css";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
@@ -56,27 +57,39 @@ export function NutritionalStatusAnalytics({ selectedYear }: NutritionalStatusAn
     <div className="space-y-6">
       {/* Summary Cards */}
       <div className="grid gap-4 md:grid-cols-4">
-        <div className="admin-glass-panel p-5">
+        <div className="stat-card">
           <div className="flex justify-between items-center">
-            <div><p className="text-xs text-slate-600 font-semibold">Total Children</p><p className="text-2xl font-bold text-slate-900 mt-1">{total}</p></div>
+            <div>
+              <span className="stat-value">{total}</span>
+              <p className="stat-label">Total Children</p>
+            </div>
             <Users className="h-8 w-8 text-emerald-500" />
           </div>
         </div>
-        <div className="admin-glass-panel p-5">
+        <div className="stat-card">
           <div className="flex justify-between items-center">
-            <div><p className="text-xs text-slate-600 font-semibold">Malnourished %</p><p className="text-2xl font-bold text-red-600 mt-1">{(summary.below_normal_percentage || 0).toFixed(1)}%</p></div>
+            <div>
+              <span className="stat-value text-red-600">{(summary.below_normal_percentage || 0).toFixed(1)}%</span>
+              <p className="stat-label">Malnourished %</p>
+            </div>
             <TrendingDown className="h-8 w-8 text-red-500" />
           </div>
         </div>
-        <div className="admin-glass-panel p-5">
+        <div className="stat-card">
           <div className="flex justify-between items-center">
-            <div><p className="text-xs text-slate-600 font-semibold">Underweight</p><p className="text-2xl font-bold text-amber-600 mt-1">{underweight}</p></div>
+            <div>
+              <span className="stat-value text-amber-600">{underweight}</span>
+              <p className="stat-label">Underweight</p>
+            </div>
             <TrendingDown className="h-8 w-8 text-amber-500" />
           </div>
         </div>
-        <div className="admin-glass-panel p-5">
+        <div className="stat-card">
           <div className="flex justify-between items-center">
-            <div><p className="text-xs text-slate-600 font-semibold">Stunted</p><p className="text-2xl font-bold text-orange-600 mt-1">{stunted}</p></div>
+            <div>
+              <span className="stat-value text-orange-600">{stunted}</span>
+              <p className="stat-label">Stunted</p>
+            </div>
             <TrendingDown className="h-8 w-8 text-orange-500" />
           </div>
         </div>
@@ -84,8 +97,8 @@ export function NutritionalStatusAnalytics({ selectedYear }: NutritionalStatusAn
 
       {/* Charts */}
       <div className="grid gap-4 md:grid-cols-3">
-        <div className="admin-glass-panel p-3 h-64">
-          <h3 className="text-xs font-bold text-slate-800 mb-2">⚖️ Weight-for-Age</h3>
+        <div className="chart-container h-64">
+          <h3 className="chart-title text-xs mb-2">⚖️ Weight-for-Age</h3>
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
@@ -109,8 +122,8 @@ export function NutritionalStatusAnalytics({ selectedYear }: NutritionalStatusAn
           </ResponsiveContainer>
         </div>
 
-        <div className="admin-glass-panel p-3 h-64">
-          <h3 className="text-xs font-bold text-slate-800 mb-2">📏 Height-for-Age</h3>
+        <div className="chart-container h-64">
+          <h3 className="chart-title text-xs mb-2">📏 Height-for-Age</h3>
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
@@ -134,8 +147,8 @@ export function NutritionalStatusAnalytics({ selectedYear }: NutritionalStatusAn
           </ResponsiveContainer>
         </div>
 
-        <div className="admin-glass-panel p-3 h-64">
-          <h3 className="text-xs font-bold text-slate-800 mb-2">📊 Weight-for-Height</h3>
+        <div className="chart-container h-64">
+          <h3 className="chart-title text-xs mb-2">📊 Weight-for-Height</h3>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
               data={[
@@ -156,12 +169,12 @@ export function NutritionalStatusAnalytics({ selectedYear }: NutritionalStatusAn
       </div>
 
       {/* Insights */}
-      <div className="admin-glass-panel p-6 bg-emerald-50 border border-emerald-200">
-        <h3 className="text-sm font-bold text-emerald-900 mb-3">💡 Insights</h3>
-        <div className="text-xs space-y-1">
-          <p><strong>Underweight:</strong> {total > 0 ? ((underweight / total) * 100).toFixed(1) : 0}%</p>
-          <p><strong>Stunted:</strong> {total > 0 ? ((stunted / total) * 100).toFixed(1) : 0}%</p>
-          <p><strong>Wasted:</strong> {total > 0 ? (((whz.moderately_wasted?.total || 0) + (whz.severely_wasted?.total || 0)) / total * 100).toFixed(1) : 0}%</p>
+      <div className="chart-container bg-emerald-50/80 border-emerald-200">
+        <h3 className="chart-title text-emerald-900 text-sm mb-3">💡 Insights</h3>
+        <div className="text-xs space-y-2 text-emerald-950 font-medium">
+          <p><strong>Underweight:</strong> {total > 0 ? ((underweight / total) * 100).toFixed(1) : 0}% of measured children</p>
+          <p><strong>Stunted:</strong> {total > 0 ? ((stunted / total) * 100).toFixed(1) : 0}% of measured children</p>
+          <p><strong>Wasted:</strong> {total > 0 ? (((whz.moderately_wasted?.total || 0) + (whz.severely_wasted?.total || 0)) / total * 100).toFixed(1) : 0}% of measured children</p>
         </div>
       </div>
     </div>
