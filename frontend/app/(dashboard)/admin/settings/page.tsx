@@ -263,7 +263,7 @@ export default function SettingsPage() {
                     <p className="text-[9px] text-slate-500 mt-0.5">Weighted composite risk assessment</p>
                   </div>
                   <div className="bg-white/60 border border-indigo-100 rounded-lg p-2.5">
-                    <p className="text-[10px] font-bold text-slate-700">🤖 RAG Recommendations</p>
+                    <p className="text-[10px] font-bold text-slate-700">🤖 AI-Powered Recommendations</p>
                     <p className="text-[9px] text-slate-500 mt-0.5">AI-driven interventions and monitoring plans</p>
                   </div>
                   <div className="bg-white/60 border border-indigo-100 rounded-lg p-2.5">
@@ -358,12 +358,12 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              {/* Section 5: RAG Recommendations */}
+              {/* Section 5: AI-Powered Recommendations */}
               <div className="bg-slate-50 border border-slate-150 rounded-xl p-4 space-y-3">
                 <div className="flex items-center gap-2">
                   <div className="h-8 w-8 rounded-lg bg-indigo-100 flex items-center justify-center text-lg">🤖</div>
                   <div className="flex-1">
-                    <h4 className="text-xs font-bold text-slate-800">RAG (Retrieval-Augmented Generation) Recommendations</h4>
+                    <h4 className="text-xs font-bold text-slate-800">AI-Powered Recommendations (Retrieval-Augmented Generation)</h4>
                     <p className="text-[10px] text-slate-500 mt-0.5">AI-powered personalized interventions based on child status</p>
                   </div>
                 </div>

@@ -122,31 +122,38 @@ export function AdminComprehensiveReport({
         className="print:page-break-after"
       >
         {/* Seal Logo */}
-        <img
-          src="/cabadbaran-seal.png"
-          alt="Cabadbaran City Seal"
-          style={{
-            width: '150px',
-            height: '150px',
-            marginBottom: '30px',
-            objectFit: 'contain',
-          }}
-        />
+        <div style={{ textAlign: 'center', marginBottom: '40px' }}>
+          <img
+            src="/cabadbaran-seal.png"
+            alt="Cabadbaran City Seal"
+            style={{
+              width: '500px',
+              height: '500px',
+              marginBottom: '-120px',
+              objectFit: 'contain',
+              display: 'inline-block',
+            }}
+          />
 
-        {/* Title */}
-        <h1
-          style={{
-            fontSize: '24px',
-            fontWeight: 'bold',
-            marginBottom: '10px',
-            color: '#1a1a1a',
-            lineHeight: '1.3',
-          }}
-        >
-          {userRole === 'super_admin'
-            ? 'Comprehensive City Nutrition Monitoring, GIS Analysis, Forecasting, and Decision Support Report'
-            : 'Barangay Nutrition Monitoring and Decision Support Report'}
-        </h1>
+          {/* Title */}
+          <h1
+            style={{
+              fontSize: '24px',
+              fontWeight: 'bold',
+              marginTop: '0px',
+              marginBottom: '10px',
+              color: '#1a1a1a',
+              lineHeight: '1.3',
+              position: 'relative',
+              zIndex: 1,
+              paddingTop: '100px',
+            }}
+          >
+            {userRole === 'super_admin'
+              ? 'Comprehensive City Nutrition Monitoring, GIS Analysis, Forecasting, and Decision Support Report'
+              : 'Barangay Nutrition Monitoring and Decision Support Report'}
+          </h1>
+        </div>
 
         {/* Reporting Period */}
         <p style={{ fontSize: '12px', color: '#666', marginBottom: '20px', marginTop: '30px' }}>
