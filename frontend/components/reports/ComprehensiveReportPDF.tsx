@@ -137,7 +137,7 @@ export function ComprehensiveReportPDF({
         </div>
 
         {/* Reporting Period */}
-        <p style={{ fontSize: '12px', color: '#666', marginBottom: '20px', marginTop: '30px' }}>
+        <p style={{ fontSize: '12px', color: '#666', marginBottom: '20px', marginTop: '10px' }}>
           Reporting Period: Jan 1, 2025 - Jun 28, 2025
         </p>
         <p style={{ fontSize: '11px', color: '#666', marginBottom: '40px' }}>
